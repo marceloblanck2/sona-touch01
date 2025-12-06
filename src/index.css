@@ -1,96 +1,89 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* SØNA Design System - Nordic-tech Aesthetic with Golden Ratio */
+/* All colors in HSL format */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-
-    --radius: 0.5rem;
-
-    --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
-  }
-
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Golden Ratio constant */
+    --phi: 1.618;
+    
+    /* 3-6-9 rhythm values */
+    --rhythm-3: 0.03s;
+    --rhythm-6: 0.06s;
+    --rhythm-9: 0.09s;
+    
+    /* Core palette - Deep Nordic Dark */
+    --background: 220 20% 6%;
+    --foreground: 45 10% 92%;
+    
+    /* Surface layers */
+    --card: 220 18% 9%;
+    --card-foreground: 45 10% 92%;
+    --popover: 220 20% 8%;
+    --popover-foreground: 45 10% 92%;
+    
+    /* Primary - Warm Gold (Golden Ratio inspired) */
+    --primary: 38 75% 55%;
+    --primary-foreground: 220 20% 6%;
+    --primary-glow: 38 80% 65%;
+    
+    /* Secondary - Cool Nordic Blue */
+    --secondary: 210 25% 15%;
+    --secondary-foreground: 45 10% 85%;
+    
+    /* Muted surfaces */
+    --muted: 220 15% 12%;
+    --muted-foreground: 220 10% 55%;
+    
+    /* Accent - Synesthetic shifting color */
+    --accent: 38 70% 50%;
+    --accent-foreground: 220 20% 6%;
+    
+    /* Functional colors */
+    --destructive: 0 65% 50%;
+    --destructive-foreground: 0 0% 98%;
+    
+    /* Borders and inputs */
+    --border: 220 15% 18%;
+    --input: 220 15% 15%;
+    --ring: 38 75% 55%;
+    
+    --radius: 0.618rem;
+    
+    /* Synesthetic color (dynamic) */
+    --synth-hue: 38;
+    --synth-saturation: 75%;
+    --synth-lightness: 55%;
+    --synth-color: hsl(var(--synth-hue) var(--synth-saturation) var(--synth-lightness));
+    
+    /* Gradients */
+    --gradient-pad: linear-gradient(135deg, hsl(220 20% 8%) 0%, hsl(220 18% 12%) 100%);
+    --gradient-glow: radial-gradient(circle, hsl(var(--synth-hue) 60% 50% / 0.3) 0%, transparent 70%);
+    --gradient-gold: linear-gradient(135deg, hsl(38 75% 55%) 0%, hsl(45 80% 65%) 100%);
+    
+    /* Shadows */
+    --shadow-soft: 0 4px 20px -4px hsl(220 30% 3% / 0.5);
+    --shadow-glow: 0 0 30px hsl(var(--synth-hue) 70% 50% / 0.3);
+    --shadow-inner: inset 0 2px 10px hsl(220 30% 3% / 0.5);
+    
+    /* Grid styling */
+    --grid-line: hsl(220 15% 20% / 0.5);
+    --grid-line-active: hsl(var(--synth-hue) 50% 50% / 0.3);
+    
+    /* Sidebar (keeping for compatibility) */
+    --sidebar-background: 220 20% 6%;
+    --sidebar-foreground: 45 10% 92%;
+    --sidebar-primary: 38 75% 55%;
+    --sidebar-primary-foreground: 220 20% 6%;
+    --sidebar-accent: 220 15% 15%;
+    --sidebar-accent-foreground: 45 10% 85%;
+    --sidebar-border: 220 15% 18%;
+    --sidebar-ring: 38 75% 55%;
   }
 }
 
@@ -98,8 +91,141 @@ All colors MUST be HSL.
   * {
     @apply border-border;
   }
-
+  
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Space Grotesk', sans-serif;
   }
+  
+  /* Golden Ratio spacing utilities */
+  .space-phi {
+    gap: calc(1rem * 1.618);
+  }
+  
+  .p-phi {
+    padding: calc(1rem * 1.618);
+  }
+  
+  .m-phi {
+    margin: calc(1rem * 1.618);
+  }
+}
+
+@layer components {
+  /* SØNA specific components */
+  .sona-panel {
+    @apply bg-card rounded-lg border border-border;
+    box-shadow: var(--shadow-soft);
+  }
+  
+  .sona-glow {
+    box-shadow: var(--shadow-glow);
+  }
+  
+  .sona-grid-line {
+    stroke: var(--grid-line);
+    stroke-width: 1;
+  }
+  
+  .sona-grid-line-active {
+    stroke: var(--grid-line-active);
+    stroke-width: 1.5;
+  }
+  
+  /* Touch point styling */
+  .touch-point {
+    @apply absolute rounded-full pointer-events-none;
+    background: radial-gradient(circle, hsl(var(--synth-hue) 70% 60% / 0.8) 0%, transparent 70%);
+    box-shadow: 0 0 40px hsl(var(--synth-hue) 80% 50% / 0.5);
+    transform: translate(-50%, -50%);
+    transition: opacity 0.09s ease-out;
+  }
+  
+  /* Waveform styling */
+  .waveform-line {
+    stroke: hsl(var(--synth-hue) 60% 55%);
+    stroke-width: 2;
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  
+  /* Control panel */
+  .control-select {
+    @apply bg-muted border border-border rounded-md px-3 py-2 text-sm;
+    @apply focus:outline-none focus:ring-2 focus:ring-ring;
+  }
+  
+  /* Preset buttons */
+  .preset-chip {
+    @apply px-3 py-1.5 rounded-full text-xs font-medium;
+    @apply bg-secondary text-secondary-foreground;
+    @apply hover:bg-secondary/80 transition-colors;
+  }
+  
+  .preset-chip-active {
+    @apply bg-primary text-primary-foreground;
+  }
+}
+
+@layer utilities {
+  /* Animation utilities */
+  .animate-pulse-soft {
+    animation: pulse-soft 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  
+  .animate-glow {
+    animation: glow 2s ease-in-out infinite alternate;
+  }
+  
+  /* Font utilities */
+  .font-mono-sona {
+    font-family: 'JetBrains Mono', monospace;
+  }
+  
+  .font-display {
+    font-family: 'Space Grotesk', sans-serif;
+  }
+  
+  /* Golden ratio text sizes */
+  .text-phi-xs { font-size: calc(0.75rem / 1.618); }
+  .text-phi-sm { font-size: calc(0.875rem); }
+  .text-phi-base { font-size: calc(1rem * 1); }
+  .text-phi-lg { font-size: calc(1rem * 1.618); }
+  .text-phi-xl { font-size: calc(1rem * 1.618 * 1.618); }
+  .text-phi-2xl { font-size: calc(1rem * 1.618 * 1.618 * 1.618); }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes glow {
+  from {
+    box-shadow: 0 0 20px hsl(var(--synth-hue) 70% 50% / 0.3);
+  }
+  to {
+    box-shadow: 0 0 40px hsl(var(--synth-hue) 80% 60% / 0.5);
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground));
 }
