@@ -1,13 +1,17 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+// SØNA Pad v2 - Index Page
+
+import { SonaPad } from '../components/sona/SonaPad';
+import { Helmet } from 'react-helmet-async';
 
 const Index = () => {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
-    </div>
+    <>
+      <Helmet>
+        <title>SØNA Pad v2 - Expressive Audio Instrument</title>
+        <meta name="description" content="A modern, expressive, sensory instrument featuring multitouch expression, color-to-sound synesthesia, and emergent gesture behaviors based on Golden Ratio geometry and 432 Hz audio foundation." />
+      </Helmet>
+      <SonaPad />
+    </>
   );
 };
 
