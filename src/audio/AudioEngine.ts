@@ -10,21 +10,11 @@ import {
   ZONE_BEHAVIORS 
 } from '../utils/constants';
 import { SynestheticParams } from '../utils/colorUtils';
+import { VoiceManager, ManagedVoice } from './VoiceManager';
+import { LoopManager } from './LoopManager';
 
-export interface Voice {
-  id: number;
-  oscillators: OscillatorNode[];
-  gains: GainNode[];
-  masterGain: GainNode;
-  filter: BiquadFilterNode;
-  panner: StereoPannerNode;
-  isActive: boolean;
-  x: number;
-  y: number;
-  zone: number;
-  velocity: number;
-  lastUpdate: number;
-}
+// Re-export Voice type for compatibility
+export type Voice = ManagedVoice;
 
 export interface AudioMappings {
   x: 'none' | 'frequency' | 'filter' | 'harmonics' | 'amplitude' | 'pan';
@@ -35,7 +25,6 @@ export class AudioEngine {
   private audioContext: AudioContext | null = null;
   private masterGain: GainNode | null = null;
   private analyser: AnalyserNode | null = null;
-  private voices: Map<number, Voice> = new Map();
   private synestheticParams: SynestheticParams = {
     frequency: BASE_FREQUENCY,
     harmonicDensity: 0.5,
@@ -51,6 +40,7 @@ export class AudioEngine {
     if (this.isInitialized) return;
 
     this.audioContext = new AudioContext();
+    VoiceManager.setAudioContext(this.audioContext);
     
     // Master gain
     this.masterGain = this.audioContext.createGain();
@@ -77,8 +67,9 @@ export class AudioEngine {
     this.synestheticParams = params;
     
     // Update all active voices
-    this.voices.forEach(voice => {
-      if (voice.isActive) {
+    VoiceManager.getAllVoiceIds().forEach(id => {
+      const voice = VoiceManager.getVoice(id);
+      if (voice && voice.isActive) {
         this.updateVoiceFromParams(voice);
       }
     });
@@ -89,15 +80,16 @@ export class AudioEngine {
     this.mappings = mappings;
   }
 
-  // Set grid/flow mode
+  // Set grid/flow mode with audio reset
   setGridMode(mode: 'grid' | 'flow'): void {
+    // Reset all audio when changing modes
+    this.stopAllSound();
     this.gridMode = mode;
   }
 
   // Create a new voice for a touch point
   createVoice(touchId: number, x: number, y: number): Voice | null {
     if (!this.audioContext || !this.masterGain) return null;
-    if (this.voices.size >= MAX_VOICES) return null;
 
     const zone = this.calculateZone(x, y);
     const harmonicCount = ZONE_BEHAVIORS.HARMONIC_DENSITY[zone] || 3;
@@ -162,9 +154,11 @@ export class AudioEngine {
       zone,
       velocity: 0,
       lastUpdate: performance.now(),
+      createdAt: performance.now(),
     };
     
-    this.voices.set(touchId, voice);
+    // Register with VoiceManager (will remove oldest if at limit)
+    VoiceManager.addVoice(touchId, voice);
     this.updateVoiceFromXY(voice, x, y);
     
     return voice;
@@ -172,7 +166,7 @@ export class AudioEngine {
 
   // Update voice based on XY position
   updateVoice(touchId: number, x: number, y: number): void {
-    const voice = this.voices.get(touchId);
+    const voice = VoiceManager.getVoice(touchId);
     if (!voice || !voice.isActive || !this.audioContext) return;
 
     const now = performance.now();
@@ -196,36 +190,36 @@ export class AudioEngine {
     }
     
     // Update position
-    voice.x = x;
-    voice.y = y;
-    voice.zone = newZone;
-    voice.lastUpdate = now;
+    VoiceManager.updateVoice(touchId, {
+      x,
+      y,
+      zone: newZone,
+      velocity: voice.velocity,
+      lastUpdate: now,
+    });
     
     this.updateVoiceFromXY(voice, x, y);
   }
 
   // Release a voice
   releaseVoice(touchId: number): void {
-    const voice = this.voices.get(touchId);
-    if (!voice || !this.audioContext) return;
+    // Clear any loops associated with this voice
+    LoopManager.clearLoop(touchId);
+    // Remove voice through VoiceManager
+    VoiceManager.removeVoice(touchId);
+  }
 
-    voice.isActive = false;
-    
-    // Smooth release
-    const releaseTime = this.audioContext.currentTime + RHYTHM.RELEASE;
-    voice.masterGain.gain.setTargetAtTime(0, this.audioContext.currentTime, RHYTHM.RELEASE);
-    
-    // Cleanup after release
-    setTimeout(() => {
-      voice.oscillators.forEach(osc => {
-        try { osc.stop(); osc.disconnect(); } catch (e) {}
-      });
-      voice.gains.forEach(g => g.disconnect());
-      voice.filter.disconnect();
-      voice.masterGain.disconnect();
-      voice.panner.disconnect();
-      this.voices.delete(touchId);
-    }, RHYTHM.RELEASE * 3 * 1000);
+  // Stop all sound - guaranteed silence
+  stopAllSound(): void {
+    // Clear all loops first
+    LoopManager.clearAllLoops();
+    // Remove all voices
+    VoiceManager.removeAllVoices();
+  }
+
+  // Reset audio state (for preset/mode changes)
+  resetAudioState(): void {
+    this.stopAllSound();
   }
 
   // Private: Update voice from XY position based on mappings
@@ -408,9 +402,9 @@ export class AudioEngine {
     }
   }
 
-  // Get active voice count
+  // Get active voice count from VoiceManager
   getActiveVoiceCount(): number {
-    return Array.from(this.voices.values()).filter(v => v.isActive).length;
+    return VoiceManager.getActiveVoiceCount();
   }
 
   // Check if initialized
@@ -430,7 +424,7 @@ export class AudioEngine {
 
   // Cleanup
   dispose(): void {
-    this.voices.forEach((_, id) => this.releaseVoice(id));
+    this.stopAllSound();
     this.audioContext?.close();
     this.isInitialized = false;
   }
