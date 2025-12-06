@@ -7,6 +7,7 @@ import { XYPad } from './XYPad';
 import { Waveform } from './Waveform';
 import { ControlPanel } from './ControlPanel';
 import { PresetPanel } from './PresetPanel';
+import { VoiceIndicator } from './VoiceIndicator';
 import { Preset } from '../../presets/PresetManager';
 import { MappingOption, GridMode } from '../../utils/constants';
 
@@ -28,6 +29,7 @@ export const SonaPad: React.FC = () => {
     handleTouchMove,
     handleTouchEnd,
     applySettings,
+    stopAllSound,
   } = useAudioEngine();
 
   const handleLoadPreset = useCallback((preset: Preset) => {
@@ -55,6 +57,7 @@ export const SonaPad: React.FC = () => {
           activeVoices={activeVoices} 
           color={color} 
           isInitialized={isInitialized}
+          onStop={stopAllSound}
         />
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-6">
@@ -77,8 +80,24 @@ export const SonaPad: React.FC = () => {
               />
             </div>
 
-            {/* Waveform */}
-            <Waveform data={waveformData} color={color} height={80} />
+            {/* Waveform and Voice Count */}
+            <div className="flex items-center gap-4">
+              <div className="flex-1">
+                <Waveform data={waveformData} color={color} height={80} />
+              </div>
+              <div 
+                className="sona-panel px-4 py-3"
+                style={{
+                  borderColor: `hsl(${color.h} ${color.s}% ${color.l}% / 0.1)`,
+                }}
+              >
+                <VoiceIndicator 
+                  activeVoices={activeVoices} 
+                  color={color}
+                  showText={true}
+                />
+              </div>
+            </div>
           </div>
 
           {/* Control Panel */}

@@ -3,17 +3,20 @@
 import React from 'react';
 import { HSLColor } from '../../utils/colorUtils';
 import { VoiceIndicator } from './VoiceIndicator';
+import { StopButton } from './StopButton';
 
 interface HeaderProps {
   activeVoices: number;
   color: HSLColor;
   isInitialized: boolean;
+  onStop: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   activeVoices,
   color,
   isInitialized,
+  onStop,
 }) => {
   return (
     <header className="flex items-center justify-between py-4">
@@ -53,6 +56,14 @@ export const Header: React.FC<HeaderProps> = ({
           </span>
         </div>
 
+        {/* Stop Button */}
+        <StopButton 
+          onStop={onStop} 
+          color={color} 
+          activeVoices={activeVoices}
+        />
+
+        {/* Voice Indicator */}
         <VoiceIndicator activeVoices={activeVoices} color={color} />
       </div>
     </header>

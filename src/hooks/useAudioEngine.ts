@@ -2,6 +2,8 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { audioEngine, AudioMappings } from '../audio/AudioEngine';
+import { VoiceManager } from '../audio/VoiceManager';
+import { LoopManager } from '../audio/LoopManager';
 import { SynestheticParams, HSLColor, colorToAudioParams, applySynthColor } from '../utils/colorUtils';
 import { MappingOption, GridMode } from '../utils/constants';
 
@@ -22,6 +24,7 @@ export function useAudioEngine() {
   const [masterVolume, setMasterVolume] = useState(0.5);
   const [waveformData, setWaveformData] = useState<Float32Array>(new Float32Array(0));
   const animationRef = useRef<number>();
+  const voiceCountRef = useRef<number>();
 
   // Initialize audio engine
   const initialize = useCallback(async () => {
@@ -44,10 +47,12 @@ export function useAudioEngine() {
     audioEngine.setMappings(newMappings);
   }, [mappings]);
 
-  // Update grid mode
+  // Update grid mode - resets audio
   const updateGridMode = useCallback((mode: GridMode) => {
-    setGridMode(mode);
+    // AudioEngine.setGridMode now handles the audio reset
     audioEngine.setGridMode(mode);
+    setGridMode(mode);
+    setActiveVoices(0);
   }, []);
 
   // Update color
@@ -62,6 +67,12 @@ export function useAudioEngine() {
   const updateVolume = useCallback((volume: number) => {
     setMasterVolume(volume);
     audioEngine.setMasterVolume(volume);
+  }, []);
+
+  // Stop all sound - guaranteed silence
+  const stopAllSound = useCallback(() => {
+    audioEngine.stopAllSound();
+    setActiveVoices(0);
   }, []);
 
   // Touch handlers
@@ -81,6 +92,27 @@ export function useAudioEngine() {
     audioEngine.releaseVoice(touchId);
     setTimeout(() => setActiveVoices(audioEngine.getActiveVoiceCount()), 100);
   }, [isInitialized]);
+
+  // Poll voice count for real-time updates
+  useEffect(() => {
+    if (!isInitialized) return;
+
+    const updateVoiceCount = () => {
+      const count = audioEngine.getActiveVoiceCount();
+      if (count !== activeVoices) {
+        setActiveVoices(count);
+      }
+      voiceCountRef.current = requestAnimationFrame(updateVoiceCount);
+    };
+
+    voiceCountRef.current = requestAnimationFrame(updateVoiceCount);
+
+    return () => {
+      if (voiceCountRef.current) {
+        cancelAnimationFrame(voiceCountRef.current);
+      }
+    };
+  }, [isInitialized, activeVoices]);
 
   // Waveform animation loop
   useEffect(() => {
@@ -108,19 +140,25 @@ export function useAudioEngine() {
     };
   }, []);
 
-  // Apply current settings
+  // Apply preset settings - resets audio first
   const applySettings = useCallback((settings: {
     mappingX: MappingOption;
     mappingY: MappingOption;
     mode: GridMode;
     color: HSLColor;
   }) => {
+    // Step 1: Stop all sound and clear all loops
+    audioEngine.resetAudioState();
+    setActiveVoices(0);
+    
+    // Step 2: Apply new settings after audio is reset
     const newMappings = { x: settings.mappingX, y: settings.mappingY };
     setMappings(newMappings);
     audioEngine.setMappings(newMappings);
     
+    // Note: Don't call setGridMode here as it would reset audio again
+    // Just update the internal mode without the reset
     setGridMode(settings.mode);
-    audioEngine.setGridMode(settings.mode);
     
     setColor(settings.color);
     const params = colorToAudioParams(settings.color);
@@ -146,5 +184,6 @@ export function useAudioEngine() {
     handleTouchMove,
     handleTouchEnd,
     applySettings,
+    stopAllSound,
   };
 }
