@@ -1,7 +1,7 @@
-// SØNA Pad v2 - XY Pad Component with Multitouch Support
+// SØNA Touch 01 - XY Pad Component with Multitouch Support
 
-import React, { useRef, useCallback, useEffect, useState } from 'react';
-import { PHI, GRID_3x3 } from '../../utils/constants';
+import React, { useRef, useCallback, useState } from 'react';
+import { GRID_3x3 } from '../../utils/constants';
 import { GridMode } from '../../utils/constants';
 import { HSLColor } from '../../utils/colorUtils';
 
@@ -32,6 +32,7 @@ export const XYPad: React.FC<XYPadProps> = ({
   const [touchPoints, setTouchPoints] = useState<Map<number, TouchPoint>>(new Map());
   const [isActive, setIsActive] = useState(false);
   const hasInteracted = useRef(false);
+  const activePointers = useRef<Set<number>>(new Set());
 
   // Get normalized coordinates from event
   const getNormalizedCoords = useCallback((clientX: number, clientY: number) => {
@@ -44,9 +45,32 @@ export const XYPad: React.FC<XYPadProps> = ({
     return { x, y };
   }, []);
 
+  // Check if this is a valid primary input (left click or touch)
+  const isValidInput = useCallback((e: React.PointerEvent): boolean => {
+    // Only accept primary button (left click) or touch/pen
+    // button === 0 is primary button, button === -1 is no button (touch)
+    if (e.pointerType === 'mouse' && e.button !== 0) {
+      return false;
+    }
+    return true;
+  }, []);
+
   // Handle pointer down
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    // Prevent non-primary inputs (right-click, etc.)
+    if (!isValidInput(e)) {
+      return;
+    }
+    
     e.preventDefault();
+    e.stopPropagation();
+    
+    const id = e.pointerId;
+    
+    // Prevent duplicate handling of same pointer
+    if (activePointers.current.has(id)) {
+      return;
+    }
     
     if (!hasInteracted.current) {
       hasInteracted.current = true;
@@ -54,7 +78,9 @@ export const XYPad: React.FC<XYPadProps> = ({
     }
     
     const { x, y } = getNormalizedCoords(e.clientX, e.clientY);
-    const id = e.pointerId;
+    
+    // Track this pointer locally
+    activePointers.current.add(id);
     
     setTouchPoints(prev => {
       const next = new Map(prev);
@@ -66,14 +92,21 @@ export const XYPad: React.FC<XYPadProps> = ({
     onTouchStart(id, x, y);
     
     // Capture pointer for tracking outside element
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-  }, [getNormalizedCoords, onTouchStart, onInteractionStart]);
+    try {
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    } catch (err) {
+      // Pointer capture may fail in some cases, continue anyway
+    }
+  }, [getNormalizedCoords, onTouchStart, onInteractionStart, isValidInput]);
 
   // Handle pointer move
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     const id = e.pointerId;
     
-    if (!touchPoints.has(id)) return;
+    // Only process if this pointer is tracked
+    if (!activePointers.current.has(id)) return;
+    
+    e.preventDefault();
     
     const { x, y } = getNormalizedCoords(e.clientX, e.clientY);
     
@@ -84,11 +117,19 @@ export const XYPad: React.FC<XYPadProps> = ({
     });
     
     onTouchMove(id, x, y);
-  }, [getNormalizedCoords, onTouchMove, touchPoints]);
+  }, [getNormalizedCoords, onTouchMove]);
 
-  // Handle pointer up
+  // Handle pointer up/end
   const handlePointerUp = useCallback((e: React.PointerEvent) => {
     const id = e.pointerId;
+    
+    // Only process if this pointer was tracked
+    if (!activePointers.current.has(id)) return;
+    
+    e.preventDefault();
+    
+    // Remove from local tracking
+    activePointers.current.delete(id);
     
     setTouchPoints(prev => {
       const next = new Map(prev);
@@ -98,7 +139,20 @@ export const XYPad: React.FC<XYPadProps> = ({
     });
     
     onTouchEnd(id);
+    
+    // Release pointer capture
+    try {
+      (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch (err) {
+      // May fail if already released
+    }
   }, [onTouchEnd]);
+
+  // Handle context menu (prevent right-click menu)
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
 
   // Render grid lines
   const renderGrid = () => {
@@ -185,6 +239,7 @@ export const XYPad: React.FC<XYPadProps> = ({
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
       onPointerLeave={handlePointerUp}
+      onContextMenu={handleContextMenu}
     >
       {/* Grid overlay */}
       {renderGrid()}

@@ -1,13 +1,19 @@
-// SØNA Pad v2 - Loop Management System
+// SØNA Touch 01 - Loop Management System
 // Centralized control for all rhythmic and repeating timers
 
 class LoopManagerClass {
-  private loops: Map<number, number[]> = new Map();
+  private loops: Map<number, Set<number>> = new Map();
+  private globalTimers: Set<number> = new Set();
 
   addLoop(voiceId: number, timerId: number): void {
-    const existing = this.loops.get(voiceId) || [];
-    existing.push(timerId);
-    this.loops.set(voiceId, existing);
+    if (!this.loops.has(voiceId)) {
+      this.loops.set(voiceId, new Set());
+    }
+    this.loops.get(voiceId)!.add(timerId);
+  }
+
+  addGlobalTimer(timerId: number): void {
+    this.globalTimers.add(timerId);
   }
 
   clearLoop(voiceId: number): void {
@@ -22,25 +28,43 @@ class LoopManagerClass {
   }
 
   clearAllLoops(): void {
-    this.loops.forEach((timers, voiceId) => {
+    // Clear all voice-specific loops
+    this.loops.forEach((timers) => {
       timers.forEach(id => {
         clearTimeout(id);
         clearInterval(id);
       });
     });
     this.loops.clear();
+
+    // Clear all global timers
+    this.globalTimers.forEach(id => {
+      clearTimeout(id);
+      clearInterval(id);
+    });
+    this.globalTimers.clear();
   }
 
   hasLoops(voiceId: number): boolean {
-    return this.loops.has(voiceId) && (this.loops.get(voiceId)?.length || 0) > 0;
+    const timers = this.loops.get(voiceId);
+    return timers ? timers.size > 0 : false;
   }
 
   getLoopCount(): number {
     let count = 0;
     this.loops.forEach(timers => {
-      count += timers.length;
+      count += timers.size;
     });
-    return count;
+    return count + this.globalTimers.size;
+  }
+
+  removeTimer(voiceId: number, timerId: number): void {
+    const timers = this.loops.get(voiceId);
+    if (timers) {
+      clearTimeout(timerId);
+      clearInterval(timerId);
+      timers.delete(timerId);
+    }
   }
 }
 
