@@ -1,4 +1,4 @@
-// SØNA Pad v2 - Audio Engine React Hook
+// SØNA Touch 01 - Audio Engine React Hook
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { audioEngine, AudioMappings } from '../audio/AudioEngine';
@@ -25,6 +25,7 @@ export function useAudioEngine() {
   const [waveformData, setWaveformData] = useState<Float32Array>(new Float32Array(0));
   const animationRef = useRef<number>();
   const voiceCountRef = useRef<number>();
+  const activeTouches = useRef<Set<number>>(new Set());
 
   // Initialize audio engine
   const initialize = useCallback(async () => {
@@ -49,7 +50,9 @@ export function useAudioEngine() {
 
   // Update grid mode - resets audio
   const updateGridMode = useCallback((mode: GridMode) => {
-    // AudioEngine.setGridMode now handles the audio reset
+    // Clear local touch tracking
+    activeTouches.current.clear();
+    // AudioEngine.setGridMode handles the audio reset
     audioEngine.setGridMode(mode);
     setGridMode(mode);
     setActiveVoices(0);
@@ -71,26 +74,45 @@ export function useAudioEngine() {
 
   // Stop all sound - guaranteed silence
   const stopAllSound = useCallback(() => {
+    // Clear local touch tracking
+    activeTouches.current.clear();
+    // Stop all audio
     audioEngine.stopAllSound();
     setActiveVoices(0);
   }, []);
 
-  // Touch handlers
+  // Touch handlers with duplicate prevention
   const handleTouchStart = useCallback((touchId: number, x: number, y: number) => {
     if (!isInitialized) return;
+    
+    // Prevent duplicate voice creation for same touch
+    if (activeTouches.current.has(touchId)) {
+      return;
+    }
+    
+    activeTouches.current.add(touchId);
     audioEngine.createVoice(touchId, x, y);
     setActiveVoices(audioEngine.getActiveVoiceCount());
   }, [isInitialized]);
 
   const handleTouchMove = useCallback((touchId: number, x: number, y: number) => {
     if (!isInitialized) return;
+    // Only update if touch is tracked
+    if (!activeTouches.current.has(touchId)) return;
     audioEngine.updateVoice(touchId, x, y);
   }, [isInitialized]);
 
   const handleTouchEnd = useCallback((touchId: number) => {
     if (!isInitialized) return;
+    
+    // Only release if touch was tracked
+    if (!activeTouches.current.has(touchId)) return;
+    
+    activeTouches.current.delete(touchId);
     audioEngine.releaseVoice(touchId);
-    setTimeout(() => setActiveVoices(audioEngine.getActiveVoiceCount()), 100);
+    
+    // Update voice count after release
+    setActiveVoices(audioEngine.getActiveVoiceCount());
   }, [isInitialized]);
 
   // Poll voice count for real-time updates

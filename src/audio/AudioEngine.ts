@@ -1,4 +1,4 @@
-// SØNA Pad v2 - Core Audio Engine
+// SØNA Touch 01 - Core Audio Engine
 // 432 Hz base, additive synthesis, per-voice control
 
 import { 
@@ -34,6 +34,7 @@ export class AudioEngine {
   private mappings: AudioMappings = { x: 'frequency', y: 'filter' };
   private gridMode: 'grid' | 'flow' = 'grid';
   private isInitialized = false;
+  private activePointers: Set<number> = new Set(); // Track active pointers
 
   // Initialize audio context (must be called after user interaction)
   async initialize(): Promise<void> {
@@ -90,6 +91,15 @@ export class AudioEngine {
   // Create a new voice for a touch point
   createVoice(touchId: number, x: number, y: number): Voice | null {
     if (!this.audioContext || !this.masterGain) return null;
+
+    // Check if this pointer is already tracked
+    if (this.activePointers.has(touchId)) {
+      // Release existing voice first to prevent duplicates
+      this.releaseVoice(touchId);
+    }
+
+    // Track this pointer
+    this.activePointers.add(touchId);
 
     const zone = this.calculateZone(x, y);
     const harmonicCount = ZONE_BEHAVIORS.HARMONIC_DENSITY[zone] || 3;
@@ -155,6 +165,7 @@ export class AudioEngine {
       velocity: 0,
       lastUpdate: performance.now(),
       createdAt: performance.now(),
+      releaseTimers: [],
     };
     
     // Register with VoiceManager (will remove oldest if at limit)
@@ -203,6 +214,9 @@ export class AudioEngine {
 
   // Release a voice
   releaseVoice(touchId: number): void {
+    // Remove from active pointers
+    this.activePointers.delete(touchId);
+    
     // Clear any loops associated with this voice
     LoopManager.clearLoop(touchId);
     // Remove voice through VoiceManager
@@ -211,10 +225,26 @@ export class AudioEngine {
 
   // Stop all sound - guaranteed silence
   stopAllSound(): void {
+    // Clear all active pointers
+    this.activePointers.clear();
+    
     // Clear all loops first
     LoopManager.clearAllLoops();
-    // Remove all voices
+    
+    // Remove all voices immediately
     VoiceManager.removeAllVoices();
+    
+    // Reset master gain to ensure silence
+    if (this.masterGain && this.audioContext) {
+      const currentTime = this.audioContext.currentTime;
+      this.masterGain.gain.cancelScheduledValues(currentTime);
+      this.masterGain.gain.setValueAtTime(0, currentTime);
+      // Restore after brief moment
+      this.masterGain.gain.setValueAtTime(0.5, currentTime + 0.05);
+    }
+    
+    // Log successful stop
+    console.log('SØNA Touch 01 — All audio stopped successfully.');
   }
 
   // Reset audio state (for preset/mode changes)
@@ -222,9 +252,14 @@ export class AudioEngine {
     this.stopAllSound();
   }
 
+  // Check if a pointer is currently active
+  isPointerActive(pointerId: number): boolean {
+    return this.activePointers.has(pointerId);
+  }
+
   // Private: Update voice from XY position based on mappings
   private updateVoiceFromXY(voice: Voice, x: number, y: number): void {
-    if (!this.audioContext) return;
+    if (!this.audioContext || !voice.isActive) return;
 
     const applyMapping = (param: string, value: number) => {
       switch (param) {
@@ -285,7 +320,7 @@ export class AudioEngine {
 
   // Private: Update voice from synesthetic parameters
   private updateVoiceFromParams(voice: Voice): void {
-    if (!this.audioContext) return;
+    if (!this.audioContext || !voice.isActive) return;
 
     // Update base frequencies
     voice.oscillators.forEach((osc, i) => {
@@ -322,7 +357,7 @@ export class AudioEngine {
 
   // Private: Handle zone changes in grid mode
   private onZoneChange(voice: Voice, newZone: number): void {
-    if (!this.audioContext) return;
+    if (!this.audioContext || !voice.isActive) return;
 
     const harmonicDensity = ZONE_BEHAVIORS.HARMONIC_DENSITY[newZone] / 9;
     const modulationSpeed = ZONE_BEHAVIORS.MODULATION_SPEED[newZone];
@@ -341,7 +376,7 @@ export class AudioEngine {
 
   // Private: Apply flow mode emergent behaviors
   private applyFlowBehaviors(voice: Voice): void {
-    if (!this.audioContext) return;
+    if (!this.audioContext || !voice.isActive) return;
 
     const velocity = voice.velocity;
     
@@ -393,10 +428,10 @@ export class AudioEngine {
 
   // Set master volume
   setMasterVolume(volume: number): void {
-    if (this.masterGain) {
+    if (this.masterGain && this.audioContext) {
       this.masterGain.gain.setTargetAtTime(
         Math.max(0, Math.min(1, volume)),
-        this.audioContext?.currentTime || 0,
+        this.audioContext.currentTime,
         0.05
       );
     }

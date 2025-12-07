@@ -1,4 +1,4 @@
-// SØNA Pad v2 - Voice Management System
+// SØNA Touch 01 - Voice Management System
 // Centralized control for all active voices
 
 import { MAX_VOICES, RHYTHM } from '../utils/constants';
@@ -17,28 +17,37 @@ export interface ManagedVoice {
   velocity: number;
   lastUpdate: number;
   createdAt: number;
+  releaseTimers: number[]; // Track any pending release timers
 }
 
 class VoiceManagerClass {
   private voices: Map<number, ManagedVoice> = new Map();
   private audioContext: AudioContext | null = null;
+  private pendingCleanups: Map<number, number> = new Map(); // Track cleanup timeouts
 
   setAudioContext(ctx: AudioContext | null): void {
     this.audioContext = ctx;
   }
 
   addVoice(voiceId: number, voiceObject: ManagedVoice): void {
+    // If voice already exists, remove it first to prevent duplicates
+    if (this.voices.has(voiceId)) {
+      this.removeVoice(voiceId);
+    }
+    
     // Enforce maximum 9 voices - remove oldest if at limit
     if (this.voices.size >= MAX_VOICES) {
       this.removeOldestVoice();
     }
     
+    // Initialize release timers array
+    voiceObject.releaseTimers = [];
     this.voices.set(voiceId, voiceObject);
   }
 
   updateVoice(voiceId: number, params: Partial<ManagedVoice>): void {
     const voice = this.voices.get(voiceId);
-    if (voice) {
+    if (voice && voice.isActive) {
       Object.assign(voice, params);
     }
   }
@@ -51,7 +60,20 @@ class VoiceManagerClass {
     const voice = this.voices.get(voiceId);
     if (!voice) return;
 
-    this.fadeOutAndCleanup(voice);
+    // Cancel any pending cleanup for this voice
+    const pendingCleanup = this.pendingCleanups.get(voiceId);
+    if (pendingCleanup) {
+      clearTimeout(pendingCleanup);
+      this.pendingCleanups.delete(voiceId);
+    }
+
+    // Clear any release timers
+    if (voice.releaseTimers) {
+      voice.releaseTimers.forEach(timer => clearTimeout(timer));
+      voice.releaseTimers = [];
+    }
+
+    this.fadeOutAndCleanup(voice, voiceId);
     this.voices.delete(voiceId);
   }
 
@@ -74,34 +96,47 @@ class VoiceManagerClass {
   }
 
   removeAllVoices(): void {
+    // Cancel all pending cleanups first
+    this.pendingCleanups.forEach(timer => clearTimeout(timer));
+    this.pendingCleanups.clear();
+
+    // Immediately force disconnect all voices (no fade for STOP)
     this.voices.forEach((voice, id) => {
-      this.fadeOutAndCleanup(voice, true);
+      // Clear release timers
+      if (voice.releaseTimers) {
+        voice.releaseTimers.forEach(timer => clearTimeout(timer));
+      }
+      this.forceDisconnect(voice);
     });
     this.voices.clear();
   }
 
-  private fadeOutAndCleanup(voice: ManagedVoice, fast: boolean = false): void {
+  private fadeOutAndCleanup(voice: ManagedVoice, voiceId: number, fast: boolean = false): void {
     if (!this.audioContext) {
-      // Force immediate cleanup without audio context
       this.forceDisconnect(voice);
       return;
     }
 
-    const fadeTime = fast ? 0.02 : RHYTHM.RELEASE;
+    const fadeTime = fast ? 0.01 : RHYTHM.RELEASE;
     const currentTime = this.audioContext.currentTime;
 
     try {
+      // Mark as inactive immediately to prevent updates
+      voice.isActive = false;
+      
       // Quick fade out to avoid clicks
       voice.masterGain.gain.cancelScheduledValues(currentTime);
       voice.masterGain.gain.setValueAtTime(voice.masterGain.gain.value, currentTime);
       voice.masterGain.gain.linearRampToValueAtTime(0, currentTime + fadeTime);
 
-      // Stop and disconnect after fade
-      setTimeout(() => {
+      // Schedule disconnect after fade
+      const cleanupTimer = window.setTimeout(() => {
         this.forceDisconnect(voice);
-      }, fadeTime * 1000 + 50);
+        this.pendingCleanups.delete(voiceId);
+      }, fadeTime * 1000 + 20);
+      
+      this.pendingCleanups.set(voiceId, cleanupTimer);
     } catch (e) {
-      // If audio scheduling fails, force disconnect
       this.forceDisconnect(voice);
     }
   }
@@ -109,22 +144,43 @@ class VoiceManagerClass {
   private forceDisconnect(voice: ManagedVoice): void {
     voice.isActive = false;
     
+    // Stop and disconnect all oscillators
     voice.oscillators.forEach(osc => {
-      try { osc.stop(); } catch (e) {}
-      try { osc.disconnect(); } catch (e) {}
+      try { 
+        osc.stop(0); 
+      } catch (e) {}
+      try { 
+        osc.disconnect(); 
+      } catch (e) {}
     });
 
+    // Disconnect all gain nodes
     voice.gains.forEach(g => {
-      try { g.disconnect(); } catch (e) {}
+      try { 
+        g.disconnect(); 
+      } catch (e) {}
     });
 
-    try { voice.filter.disconnect(); } catch (e) {}
-    try { voice.masterGain.disconnect(); } catch (e) {}
-    try { voice.panner.disconnect(); } catch (e) {}
+    // Disconnect filter, master gain, and panner
+    try { 
+      voice.filter.disconnect(); 
+    } catch (e) {}
+    try { 
+      voice.masterGain.gain.cancelScheduledValues(0);
+      voice.masterGain.gain.value = 0;
+      voice.masterGain.disconnect(); 
+    } catch (e) {}
+    try { 
+      voice.panner.disconnect(); 
+    } catch (e) {}
+
+    // Clear oscillators and gains arrays
+    voice.oscillators = [];
+    voice.gains = [];
   }
 
   getActiveVoiceCount(): number {
-    return Array.from(this.voices.values()).filter(v => v.isActive).length;
+    return this.voices.size;
   }
 
   getAllVoiceIds(): number[] {
@@ -133,6 +189,11 @@ class VoiceManagerClass {
 
   hasVoice(voiceId: number): boolean {
     return this.voices.has(voiceId);
+  }
+
+  // Check if any voices are truly playing
+  hasActiveVoices(): boolean {
+    return this.voices.size > 0;
   }
 }
 
