@@ -1,4 +1,4 @@
-// SØNA Pad v2 - Preset Panel Component
+// SØNA Touch 01 - Preset Panel Component
 
 import React, { useState, useCallback } from 'react';
 import { Preset, presetManager } from '../../presets/PresetManager';

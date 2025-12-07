@@ -1,3 +1,6 @@
+// Project renamed to SØNA Touch 01.
+// Full redesign and expansion will be applied in future steps.
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
