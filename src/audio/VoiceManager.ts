@@ -17,7 +17,15 @@ export interface ManagedVoice {
   velocity: number;
   lastUpdate: number;
   createdAt: number;
-  releaseTimers: number[]; // Track any pending release timers
+  releaseTimers: number[];
+  // Vocal synthesis additions
+  formantFilters?: BiquadFilterNode[];
+  formantGains?: GainNode[];
+  vibratoLFO?: OscillatorNode;
+  vibratoGain?: GainNode;
+  tremoloLFO?: OscillatorNode;
+  tremoloGain?: GainNode;
+  intensity: number; // 0-1 for vowel morphing
 }
 
 class VoiceManagerClass {
@@ -146,37 +154,57 @@ class VoiceManagerClass {
     
     // Stop and disconnect all oscillators
     voice.oscillators.forEach(osc => {
-      try { 
-        osc.stop(0); 
-      } catch (e) {}
-      try { 
-        osc.disconnect(); 
-      } catch (e) {}
+      try { osc.stop(0); } catch (e) {}
+      try { osc.disconnect(); } catch (e) {}
     });
+
+    // Stop vibrato and tremolo LFOs
+    if (voice.vibratoLFO) {
+      try { voice.vibratoLFO.stop(0); } catch (e) {}
+      try { voice.vibratoLFO.disconnect(); } catch (e) {}
+    }
+    if (voice.tremoloLFO) {
+      try { voice.tremoloLFO.stop(0); } catch (e) {}
+      try { voice.tremoloLFO.disconnect(); } catch (e) {}
+    }
 
     // Disconnect all gain nodes
     voice.gains.forEach(g => {
-      try { 
-        g.disconnect(); 
-      } catch (e) {}
+      try { g.disconnect(); } catch (e) {}
     });
 
+    // Disconnect formant filters and gains
+    if (voice.formantFilters) {
+      voice.formantFilters.forEach(f => {
+        try { f.disconnect(); } catch (e) {}
+      });
+    }
+    if (voice.formantGains) {
+      voice.formantGains.forEach(g => {
+        try { g.disconnect(); } catch (e) {}
+      });
+    }
+    if (voice.vibratoGain) {
+      try { voice.vibratoGain.disconnect(); } catch (e) {}
+    }
+    if (voice.tremoloGain) {
+      try { voice.tremoloGain.disconnect(); } catch (e) {}
+    }
+
     // Disconnect filter, master gain, and panner
-    try { 
-      voice.filter.disconnect(); 
-    } catch (e) {}
+    try { voice.filter.disconnect(); } catch (e) {}
     try { 
       voice.masterGain.gain.cancelScheduledValues(0);
       voice.masterGain.gain.value = 0;
       voice.masterGain.disconnect(); 
     } catch (e) {}
-    try { 
-      voice.panner.disconnect(); 
-    } catch (e) {}
+    try { voice.panner.disconnect(); } catch (e) {}
 
-    // Clear oscillators and gains arrays
+    // Clear arrays
     voice.oscillators = [];
     voice.gains = [];
+    voice.formantFilters = [];
+    voice.formantGains = [];
   }
 
   getActiveVoiceCount(): number {
