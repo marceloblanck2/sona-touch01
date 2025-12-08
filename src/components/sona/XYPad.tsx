@@ -1,6 +1,6 @@
 // SØNA Touch 01 - XY Pad Component with Multitouch Support
 
-import React, { useRef, useCallback, useState, useMemo } from 'react';
+import React, { useRef, useCallback, useState } from 'react';
 import { GRID_3x3 } from '../../utils/constants';
 import { GridMode } from '../../utils/constants';
 import { HSLColor } from '../../utils/colorUtils';
@@ -20,23 +20,15 @@ interface XYPadProps {
   onInteractionStart: () => void;
 }
 
-// Calculate gesture-modulated color from base color and position
-const getGestureColor = (baseColor: HSLColor, x: number, y: number): HSLColor => {
-  // X position shifts hue: -15 to +15 degrees around base
-  const hueShift = (x - 0.5) * 30;
-  const newHue = (baseColor.h + hueShift + 360) % 360;
-  
-  // Y position changes lightness: bottom = darker, top = brighter
-  // Map Y (0 = top, 1 = bottom) to lightness adjustment
-  const lightnessShift = (0.5 - y) * 20; // -10 to +10
-  const newLightness = Math.max(20, Math.min(80, baseColor.l + lightnessShift));
-  
-  return {
-    h: newHue,
-    s: baseColor.s,
-    l: newLightness,
-  };
-};
+interface GestureColorState {
+  hue: number;
+  saturation: number;
+  lightness: number;
+}
+
+// Clamp value between min and max
+const clamp = (value: number, min: number, max: number): number => 
+  Math.max(min, Math.min(max, value));
 
 export const XYPad: React.FC<XYPadProps> = ({
   gridMode,
@@ -49,15 +41,41 @@ export const XYPad: React.FC<XYPadProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const [touchPoints, setTouchPoints] = useState<Map<number, TouchPoint>>(new Map());
   const [isActive, setIsActive] = useState(false);
-  const [gesturePosition, setGesturePosition] = useState<{ x: number; y: number } | null>(null);
   const hasInteracted = useRef(false);
   const activePointers = useRef<Set<number>>(new Set());
-
-  // Calculate the gesture-modulated color based on current touch position
-  const gestureColor = useMemo(() => {
-    if (!gesturePosition) return color;
-    return getGestureColor(color, gesturePosition.x, gesturePosition.y);
-  }, [color, gesturePosition]);
+  
+  // Gesture color state with movement speed tracking
+  const [gestureColor, setGestureColor] = useState<GestureColorState>({ hue: 0, saturation: 40, lightness: 70 });
+  const lastPositionRef = useRef<{ x: number; y: number } | null>(null);
+  
+  // Update gesture color based on position and movement speed
+  const updateGestureColor = useCallback((x: number, y: number) => {
+    const prevPos = lastPositionRef.current;
+    
+    // Calculate movement speed (distance from previous position)
+    let speed = 0;
+    if (prevPos) {
+      const dx = x - prevPos.x;
+      const dy = y - prevPos.y;
+      speed = Math.sqrt(dx * dx + dy * dy);
+    }
+    lastPositionRef.current = { x, y };
+    
+    // Normalize speed (0-1 range, capped at ~0.1 movement per frame for max)
+    const normalizedSpeed = clamp(speed * 10, 0, 1);
+    
+    // Calculate HSL values from gesture
+    const hue = x * 360;
+    const lightness = clamp(40 + y * 60, 40, 100);
+    const saturation = clamp(40 + normalizedSpeed * 60, 40, 100);
+    
+    setGestureColor(prev => ({
+      hue,
+      lightness,
+      // Smooth saturation transitions
+      saturation: prev.saturation * 0.7 + saturation * 0.3,
+    }));
+  }, []);
 
   // Get normalized coordinates from event
   const getNormalizedCoords = useCallback((clientX: number, clientY: number) => {
@@ -113,8 +131,8 @@ export const XYPad: React.FC<XYPadProps> = ({
       return next;
     });
     
-    // Update gesture position for color modulation
-    setGesturePosition({ x, y });
+    // Update gesture color from position
+    updateGestureColor(x, y);
     
     setIsActive(true);
     onTouchStart(id, x, y);
@@ -144,8 +162,8 @@ export const XYPad: React.FC<XYPadProps> = ({
       return next;
     });
     
-    // Update gesture position for color modulation
-    setGesturePosition({ x, y });
+    // Update gesture color from position and movement
+    updateGestureColor(x, y);
     
     onTouchMove(id, x, y);
   }, [getNormalizedCoords, onTouchMove]);
@@ -167,7 +185,7 @@ export const XYPad: React.FC<XYPadProps> = ({
       next.delete(id);
       if (next.size === 0) {
         setIsActive(false);
-        setGesturePosition(null); // Clear gesture position when no touches
+        lastPositionRef.current = null;
       }
       return next;
     });
@@ -233,7 +251,7 @@ export const XYPad: React.FC<XYPadProps> = ({
     );
   };
 
-  // Render touch points
+  // Render touch points with gesture-driven vivid color
   const renderTouchPoints = () => {
     return Array.from(touchPoints.values()).map(point => {
       const size = 60 + Math.sin(Date.now() / 500) * 10;
@@ -241,21 +259,25 @@ export const XYPad: React.FC<XYPadProps> = ({
       return (
         <div
           key={point.id}
-          className="touch-point animate-pulse-glow"
+          className="absolute rounded-full pointer-events-none animate-pulse-glow"
           style={{
             left: `${point.x * 100}%`,
             top: `${point.y * 100}%`,
             width: size,
             height: size,
-            '--synth-hue': color.h,
-          } as React.CSSProperties}
+            transform: 'translate(-50%, -50%)',
+            background: `radial-gradient(circle, hsl(${gestureColor.hue} ${gestureColor.saturation}% ${gestureColor.lightness}%) 0%, hsl(${gestureColor.hue} ${gestureColor.saturation}% ${gestureColor.lightness}% / 0.4) 60%, transparent 100%)`,
+            boxShadow: `0 0 20px hsl(${gestureColor.hue} ${gestureColor.saturation}% ${gestureColor.lightness}% / 0.6)`,
+          }}
         />
       );
     });
   };
 
-  // Active display color: gesture-modulated when active, base color otherwise
-  const displayColor = isActive ? gestureColor : color;
+  // Background color: soft gesture color when active, base color otherwise
+  const bgHue = isActive ? gestureColor.hue : color.h;
+  const bgSat = isActive ? gestureColor.saturation : color.s;
+  const bgLight = isActive ? gestureColor.lightness : color.l;
 
   return (
     <div
@@ -263,11 +285,11 @@ export const XYPad: React.FC<XYPadProps> = ({
       className="relative w-full aspect-square rounded-lg overflow-hidden touch-none select-none cursor-crosshair"
       style={{
         background: `
-          radial-gradient(circle at 50% 50%, hsl(${displayColor.h} ${displayColor.s}% ${displayColor.l}% / 0.15) 0%, transparent 60%),
+          radial-gradient(circle at 50% 50%, hsl(${bgHue} ${bgSat}% ${bgLight}% / 0.3) 0%, transparent 60%),
           linear-gradient(135deg, hsl(220 20% 8%) 0%, hsl(220 18% 12%) 100%)
         `,
         boxShadow: isActive 
-          ? `inset 0 0 80px hsl(${gestureColor.h} ${gestureColor.s}% ${gestureColor.l}% / 0.25), 0 0 50px hsl(${gestureColor.h} ${gestureColor.s}% ${gestureColor.l}% / 0.2)` 
+          ? `inset 0 0 80px hsl(${gestureColor.hue} ${gestureColor.saturation}% ${gestureColor.lightness}% / 0.25), 0 0 50px hsl(${gestureColor.hue} ${gestureColor.saturation}% ${gestureColor.lightness}% / 0.2)` 
           : 'inset 0 2px 10px hsl(220 30% 3% / 0.5)',
         transition: isActive ? 'none' : 'box-shadow 0.3s ease, background 0.3s ease',
       }}
@@ -278,15 +300,6 @@ export const XYPad: React.FC<XYPadProps> = ({
       onPointerLeave={handlePointerUp}
       onContextMenu={handleContextMenu}
     >
-      {/* Gesture color overlay - visible during interaction */}
-      {isActive && gesturePosition && (
-        <div 
-          className="absolute inset-0 pointer-events-none transition-opacity duration-100"
-          style={{
-            background: `radial-gradient(circle at ${gesturePosition.x * 100}% ${gesturePosition.y * 100}%, hsl(${gestureColor.h} ${gestureColor.s}% ${gestureColor.l}% / 0.3) 0%, transparent 40%)`,
-          }}
-        />
-      )}
       
       {/* Grid overlay */}
       {renderGrid()}
@@ -298,13 +311,13 @@ export const XYPad: React.FC<XYPadProps> = ({
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <div 
           className="w-px h-8 opacity-20"
-          style={{ background: `hsl(${displayColor.h} ${displayColor.s}% ${displayColor.l}%)` }}
+          style={{ background: `hsl(${bgHue} ${bgSat}% ${bgLight}%)` }}
         />
       </div>
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <div 
           className="h-px w-8 opacity-20"
-          style={{ background: `hsl(${displayColor.h} ${displayColor.s}% ${displayColor.l}%)` }}
+          style={{ background: `hsl(${bgHue} ${bgSat}% ${bgLight}%)` }}
         />
       </div>
       
@@ -312,7 +325,7 @@ export const XYPad: React.FC<XYPadProps> = ({
       <div className="absolute bottom-3 right-3 pointer-events-none">
         <span 
           className="font-mono text-xs uppercase tracking-wider opacity-40"
-          style={{ color: `hsl(${displayColor.h} ${displayColor.s}% ${displayColor.l}%)` }}
+          style={{ color: `hsl(${bgHue} ${bgSat}% ${bgLight}%)` }}
         >
           {gridMode}
         </span>
