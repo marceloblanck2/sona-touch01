@@ -144,14 +144,9 @@ export const SonaPad: React.FC = () => {
 
         {/* Footer */}
         <footer className="mt-8 pt-4 border-t border-border/50">
-          <div className="flex flex-wrap items-center justify-between gap-4 text-xs text-muted-foreground">
-            <div className="flex items-center gap-4">
-              <span className="font-mono">φ = 1.618</span>
-              <span className="font-mono">f₀ = 432 Hz</span>
-              <span className="font-mono">3 · 6 · 9</span>
-            </div>
+          <div className="flex flex-wrap items-center justify-end gap-4 text-xs text-muted-foreground">
             <p className="opacity-60">
-              Multitouch • Synesthesia • Emergent Behavior
+              Multitouch • Synesthesia • Gesture • Sound • Color • Emergent Behavior
             </p>
           </div>
         </footer>
