@@ -19,8 +19,8 @@ export const Header: React.FC<HeaderProps> = ({
   onStop,
 }) => {
   return (
-    <header className="flex items-center justify-between py-4">
-      <div className="flex flex-col">
+    <header className="flex items-center justify-between py-4 bg-transparent">
+      <div className="flex flex-col bg-transparent">
         <h1 
           className="text-2xl font-semibold tracking-tight"
           style={{
@@ -28,14 +28,21 @@ export const Header: React.FC<HeaderProps> = ({
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             backgroundClip: 'text',
+            textShadow: '0 1px 2px rgba(0,0,0,0.3)',
           }}
         >
           SØNA Touch 01
         </h1>
-        <span className="text-[10px] text-muted-foreground tracking-wide mt-0.5">
+        <span 
+          className="text-[10px] text-muted-foreground tracking-wide mt-0.5"
+          style={{ textShadow: '0 1px 1px rgba(0,0,0,0.2)' }}
+        >
           Prototype Build — Touch-Based Sensory Instrument
         </span>
-        <span className="text-[10px] text-muted-foreground tracking-wide">
+        <span 
+          className="text-[10px] text-muted-foreground tracking-wide"
+          style={{ textShadow: '0 1px 1px rgba(0,0,0,0.2)' }}
+        >
           Designed and Engineered by Marcelo Blanck
         </span>
       </div>
