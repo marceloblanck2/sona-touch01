@@ -21,24 +21,22 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="flex items-center justify-between py-4">
       <div className="flex flex-col">
-        <div className="flex items-baseline gap-3">
-          <h1 
-            className="text-2xl font-semibold tracking-tight"
-            style={{
-              background: `linear-gradient(135deg, hsl(${color.h} ${color.s}% ${color.l}%), hsl(${(color.h + 30) % 360} ${color.s}% ${color.l + 10}%))`,
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
-            }}
-          >
-            SØNA
-          </h1>
-          <span className="text-xs font-mono text-muted-foreground tracking-wider">
-            Touch 01
-          </span>
-        </div>
+        <h1 
+          className="text-2xl font-semibold tracking-tight"
+          style={{
+            background: `linear-gradient(135deg, hsl(${color.h} ${color.s}% ${color.l}%), hsl(${(color.h + 30) % 360} ${color.s}% ${color.l + 10}%))`,
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+          }}
+        >
+          SØNA Touch 01
+        </h1>
         <span className="text-[10px] text-muted-foreground tracking-wide mt-0.5">
           Prototype Build — Touch-Based Sensory Instrument
+        </span>
+        <span className="text-[10px] text-muted-foreground tracking-wide">
+          Designed and Engineered by Marcelo Blanck
         </span>
       </div>
 

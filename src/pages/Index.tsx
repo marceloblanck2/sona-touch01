@@ -8,7 +8,7 @@ const Index = () => {
     <>
       <Helmet>
         <title>SØNA Touch 01 - Touch-Based Sensory Instrument</title>
-        <meta name="description" content="SØNA Touch 01 is a modern, expressive, sensory instrument featuring multitouch expression, color-to-sound synesthesia, and emergent gesture behaviors based on Golden Ratio geometry and 432 Hz audio foundation." />
+        <meta name="description" content="SØNA Touch 01 is the first prototype of SØNA — a sensory instrument system built around gesture, color, synesthesia and emotional sound design. Designed and Engineered by Marcelo Blanck." />
       </Helmet>
       <SonaPad />
     </>
