@@ -746,9 +746,21 @@ export class AudioEngine {
     this.audioContext?.suspend();
   }
 
-  // Resume audio context
+  // Resume audio context (legacy)
   resume(): void {
     this.audioContext?.resume();
+  }
+
+  // Ensure audio context is resumed - awaitable
+  async ensureResumed(): Promise<void> {
+    if (this.audioContext && this.audioContext.state === 'suspended') {
+      await this.audioContext.resume();
+    }
+  }
+
+  // Check if audio context is suspended
+  isSuspended(): boolean {
+    return this.audioContext ? this.audioContext.state === 'suspended' : false;
   }
 
   // Cleanup
