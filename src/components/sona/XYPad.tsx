@@ -18,6 +18,7 @@ interface XYPadProps {
   onTouchMove: (id: number, x: number, y: number) => void;
   onTouchEnd: (id: number) => void;
   onInteractionStart: () => void;
+  isFullscreen?: boolean;
 }
 
 interface GestureColorState {
@@ -37,6 +38,7 @@ export const XYPad: React.FC<XYPadProps> = ({
   onTouchMove,
   onTouchEnd,
   onInteractionStart,
+  isFullscreen = false,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [touchPoints, setTouchPoints] = useState<Map<number, TouchPoint>>(new Map());
@@ -282,7 +284,9 @@ export const XYPad: React.FC<XYPadProps> = ({
   return (
     <div
       ref={containerRef}
-      className="relative w-full aspect-square rounded-lg overflow-hidden touch-none select-none cursor-crosshair"
+      className={`relative w-full overflow-hidden touch-none select-none cursor-crosshair ${
+        isFullscreen ? 'h-full rounded-none' : 'aspect-square rounded-lg'
+      }`}
       style={{
         background: `
           radial-gradient(circle at 50% 50%, hsl(${bgHue} ${bgSat}% ${bgLight}% / 0.3) 0%, transparent 60%),
