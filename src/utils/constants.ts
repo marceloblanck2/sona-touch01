@@ -3,7 +3,7 @@
 
 export const PHI = 1.618033988749895; // Golden Ratio
 export const BASE_FREQUENCY = 432; // Hz - Natural tuning
-export const MAX_VOICES = 9; // 3×3 = 9 (3-6-9 principle)
+export const MAX_VOICES = 10; // Support 10 concurrent touches
 
 // 3-6-9 Rhythm values (in seconds)
 export const RHYTHM = {

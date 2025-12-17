@@ -43,7 +43,7 @@ class VoiceManagerClass {
       this.removeVoice(voiceId);
     }
     
-    // Enforce maximum 9 voices - remove oldest if at limit
+    // Enforce maximum voices - release oldest one musically if at limit
     if (this.voices.size >= MAX_VOICES) {
       this.removeOldestVoice();
     }

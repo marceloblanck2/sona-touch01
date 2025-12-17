@@ -26,11 +26,29 @@ export function useAudioEngine() {
   const animationRef = useRef<number>();
   const voiceCountRef = useRef<number>();
   const activeTouches = useRef<Set<number>>(new Set());
+  const audioUnlockNeeded = useRef(true);
 
-  // Initialize audio engine
+  // Ensure AudioContext is running - call on any user gesture
+  const ensureAudioUnlocked = useCallback(async () => {
+    if (!audioUnlockNeeded.current) return;
+    
+    try {
+      // Resume if suspended (browser autoplay policy)
+      await audioEngine.ensureResumed();
+      audioUnlockNeeded.current = false;
+    } catch (e) {
+      console.warn('Audio unlock failed:', e);
+    }
+  }, []);
+
+  // Initialize audio engine with reliable unlock
   const initialize = useCallback(async () => {
     if (!isInitialized) {
       await audioEngine.initialize();
+      // Ensure context is resumed after init
+      await audioEngine.ensureResumed();
+      audioUnlockNeeded.current = false;
+      
       setIsInitialized(true);
       setIsPlaying(true);
       
@@ -38,8 +56,11 @@ export function useAudioEngine() {
       const params = colorToAudioParams(color);
       audioEngine.setSynestheticParams(params);
       applySynthColor(color);
+    } else {
+      // Already initialized, just ensure resumed
+      await ensureAudioUnlocked();
     }
-  }, [isInitialized, color]);
+  }, [isInitialized, color, ensureAudioUnlocked]);
 
   // Update mappings
   const updateMapping = useCallback((axis: 'x' | 'y', value: MappingOption) => {
@@ -81,8 +102,8 @@ export function useAudioEngine() {
     setActiveVoices(0);
   }, []);
 
-  // Touch handlers with duplicate prevention
-  const handleTouchStart = useCallback((touchId: number, x: number, y: number) => {
+  // Touch handlers with duplicate prevention and audio unlock
+  const handleTouchStart = useCallback(async (touchId: number, x: number, y: number) => {
     if (!isInitialized) return;
     
     // Prevent duplicate voice creation for same touch
@@ -90,10 +111,15 @@ export function useAudioEngine() {
       return;
     }
     
+    // Ensure audio is unlocked on first gesture after page visibility change
+    if (audioUnlockNeeded.current) {
+      await ensureAudioUnlocked();
+    }
+    
     activeTouches.current.add(touchId);
     audioEngine.createVoice(touchId, x, y);
     setActiveVoices(audioEngine.getActiveVoiceCount());
-  }, [isInitialized]);
+  }, [isInitialized, ensureAudioUnlocked]);
 
   const handleTouchMove = useCallback((touchId: number, x: number, y: number) => {
     if (!isInitialized) return;
@@ -154,6 +180,23 @@ export function useAudioEngine() {
       }
     };
   }, [isInitialized, isPlaying]);
+
+  // Visibility handling - mark audio unlock needed when page becomes visible
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && isInitialized) {
+        // Mark that we need to unlock audio on next gesture
+        if (audioEngine.isSuspended()) {
+          audioUnlockNeeded.current = true;
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isInitialized]);
 
   // Cleanup on unmount
   useEffect(() => {
