@@ -1,6 +1,6 @@
 // SØNA Pad v2 - Main Application Component
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { Header } from './Header';
 import { XYPad } from './XYPad';
@@ -10,8 +10,11 @@ import { PresetPanel } from './PresetPanel';
 import { VoiceIndicator } from './VoiceIndicator';
 import { Preset } from '../../presets/PresetManager';
 import { MappingOption, GridMode } from '../../utils/constants';
+import { Maximize2, Minimize2 } from 'lucide-react';
 
 export const SonaPad: React.FC = () => {
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  
   const {
     isInitialized,
     activeVoices,
@@ -41,6 +44,58 @@ export const SonaPad: React.FC = () => {
     });
   }, [applySettings]);
 
+  // Fullscreen Mode
+  if (isFullscreen) {
+    return (
+      <div 
+        className="fixed inset-0 z-50 flex flex-col"
+        style={{
+          background: `
+            radial-gradient(ellipse at 50% 50%, hsl(${color.h} ${color.s}% ${color.l}% / 0.08) 0%, transparent 60%),
+            hsl(220 20% 6%)
+          `,
+          paddingTop: 'env(safe-area-inset-top)',
+          paddingBottom: 'env(safe-area-inset-bottom)',
+          paddingLeft: 'env(safe-area-inset-left)',
+          paddingRight: 'env(safe-area-inset-right)',
+        }}
+      >
+        {/* Minimal top bar */}
+        <div className="flex items-center justify-between px-4 py-3">
+          <span 
+            className="font-mono text-xs uppercase tracking-wider opacity-60"
+            style={{ color: `hsl(${color.h} ${color.s}% ${color.l}%)` }}
+          >
+            {gridMode}
+          </span>
+          <button
+            onClick={() => setIsFullscreen(false)}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-background/20 hover:bg-background/40 transition-colors"
+            style={{ color: `hsl(${color.h} ${color.s}% ${color.l}%)` }}
+          >
+            <Minimize2 className="w-4 h-4" />
+            <span className="text-xs font-medium">Exit</span>
+          </button>
+        </div>
+        
+        {/* Fullscreen XY Pad */}
+        <div className="flex-1 p-2">
+          <div className="h-full w-full">
+            <XYPad
+              gridMode={gridMode}
+              color={color}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onInteractionStart={initialize}
+              isFullscreen={true}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div 
       className="min-h-screen w-full px-4 py-4 md:px-8 md:py-6"
@@ -63,13 +118,24 @@ export const SonaPad: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-6">
           {/* Main XY Pad Area */}
           <div className="lg:col-span-8 space-y-4">
-            {/* XY Pad */}
+            {/* XY Pad with Fullscreen Toggle */}
             <div 
-              className="sona-panel p-4"
+              className="sona-panel p-4 relative"
               style={{
                 borderColor: `hsl(${color.h} ${color.s}% ${color.l}% / 0.15)`,
               }}
             >
+              {/* Fullscreen Toggle Button */}
+              <button
+                onClick={() => setIsFullscreen(true)}
+                className="absolute top-2 right-2 z-10 flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-background/40 hover:bg-background/60 transition-colors backdrop-blur-sm"
+                style={{ color: `hsl(${color.h} ${color.s}% ${color.l}%)` }}
+                title="Enter Focus Mode"
+              >
+                <Maximize2 className="w-4 h-4" />
+                <span className="text-xs font-medium hidden sm:inline">Focus</span>
+              </button>
+              
               <XYPad
                 gridMode={gridMode}
                 color={color}
