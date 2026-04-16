@@ -54,6 +54,9 @@ export const XYPad: React.FC<XYPadProps> = ({
   const gestureColorRef = useRef<GestureColorState>({ hue: 0, saturation: 40, lightness: 70 });
   const lastPositionRef = useRef<{ x: number; y: number } | null>(null);
   
+  // Trail color: locked at the moment of first touch, stays fixed for entire gesture
+  const trailColorRef = useRef<GestureColorState | null>(null);
+  
   // Update gesture color based on position and movement speed
   const updateGestureColor = useCallback((x: number, y: number) => {
     const prevPos = lastPositionRef.current;
@@ -141,10 +144,13 @@ export const XYPad: React.FC<XYPadProps> = ({
 
     updateGestureColor(x, y);
 
-    // Record trail point on initial touch
+    // Lock trail color at the moment of touch — stays fixed for this gesture
+    trailColorRef.current = { ...gestureColorRef.current };
+
+    // Record trail point with locked color
     if ((window as any).__sonaTrailAdd) {
-      const gc = gestureColorRef.current;
-      (window as any).__sonaTrailAdd(x, y, gc.hue, gc.saturation, gc.lightness);
+      const tc = trailColorRef.current;
+      (window as any).__sonaTrailAdd(x, y, tc.hue, tc.saturation, tc.lightness);
     }
 
     setIsActive(true);
@@ -177,10 +183,10 @@ export const XYPad: React.FC<XYPadProps> = ({
     // Update gesture color from position and movement
     updateGestureColor(x, y);
     
-    // Record trail point
-    if ((window as any).__sonaTrailAdd) {
-      const gc = gestureColorRef.current;
-      (window as any).__sonaTrailAdd(x, y, gc.hue, gc.saturation, gc.lightness);
+    // Record trail point with locked color from initial touch
+    if ((window as any).__sonaTrailAdd && trailColorRef.current) {
+      const tc = trailColorRef.current;
+      (window as any).__sonaTrailAdd(x, y, tc.hue, tc.saturation, tc.lightness);
     }
     
     onTouchMove(id, x, y);
@@ -204,6 +210,7 @@ export const XYPad: React.FC<XYPadProps> = ({
       if (next.size === 0) {
         setIsActive(false);
         lastPositionRef.current = null;
+        trailColorRef.current = null; // Reset trail color for next gesture
       }
       return next;
     });
