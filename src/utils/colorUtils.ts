@@ -174,3 +174,34 @@ export function applySynthColor(color: HSLColor) {
   root.style.setProperty('--synth-saturation', `${color.s}%`);
   root.style.setProperty('--synth-lightness', `${color.l}%`);
 }
+
+// ============================================================
+// SYNESTHETIC FEEDBACK: Sound → Color (GSI Parametric Mapping)
+// ============================================================
+// These functions derive visual properties FROM audio state,
+// implementing the GSI principle that what you see IS what you hear.
+// Frequency → Hue, Amplitude → Brightness, Intensity → Saturation
+
+// Convert a frequency (Hz) to a hue (0-360)
+// Inverse of the colorToAudioParams frequency mapping
+// Maps the audible range to the full color wheel
+export function frequencyToHue(freq: number): number {
+  // The forward mapping is: freq = 432 * (1 + hueNorm * (PHI - 1))
+  // So: hueNorm = (freq / 432 - 1) / (PHI - 1)
+  const hueNorm = (freq / BASE_FREQUENCY - 1) / (PHI - 1);
+  // Clamp to 0-1 and convert to degrees
+  const clamped = Math.max(0, Math.min(1, hueNorm));
+  return clamped * 360;
+}
+
+// Convert audio state to a complete HSL color
+// freq: current frequency in Hz
+// amplitude: 0-1 output level → lightness
+// intensity: 0-1 vowel morphing intensity → saturation
+export function audioToColor(freq: number, amplitude: number, intensity: number): HSLColor {
+  return {
+    h: frequencyToHue(freq),
+    s: Math.round(40 + intensity * 60),  // 40-100% saturation
+    l: Math.round(35 + amplitude * 50),  // 35-85% lightness
+  };
+}

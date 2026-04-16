@@ -16,6 +16,7 @@ interface XYPadProps {
   gridMode: GridMode;
   color: HSLColor;
   trailDuration: number;
+  getVoiceColor?: (touchId: number) => { h: number; s: number; l: number } | null;
   onTouchStart: (id: number, x: number, y: number) => void;
   onTouchMove: (id: number, x: number, y: number) => void;
   onTouchEnd: (id: number) => void;
@@ -37,6 +38,7 @@ export const XYPad: React.FC<XYPadProps> = ({
   gridMode,
   color,
   trailDuration,
+  getVoiceColor,
   onTouchStart,
   onTouchMove,
   onTouchEnd,
@@ -57,8 +59,9 @@ export const XYPad: React.FC<XYPadProps> = ({
   // Trail color: locked per pointer at moment of touch, stays fixed for each finger
   const trailColorsRef = useRef<Map<number, GestureColorState>>(new Map());
   
-  // Update gesture color based on position and movement speed
-  const updateGestureColor = useCallback((x: number, y: number) => {
+  // Update gesture color — uses audio-derived color when available (GSI mapping),
+  // falls back to position-based color when audio engine hasn't produced a color yet
+  const updateGestureColor = useCallback((x: number, y: number, pointerId?: number) => {
     const prevPos = lastPositionRef.current;
     
     // Calculate movement speed (distance from previous position)
@@ -70,13 +73,25 @@ export const XYPad: React.FC<XYPadProps> = ({
     }
     lastPositionRef.current = { x, y };
     
-    // Normalize speed (0-1 range, capped at ~0.1 movement per frame for max)
-    const normalizedSpeed = clamp(speed * 10, 0, 1);
+    // Try to get audio-derived color (GSI: frequency→hue, amplitude→lightness)
+    let hue: number;
+    let lightness: number;
+    let saturation: number;
     
-    // Calculate HSL values from gesture
-    const hue = x * 360;
-    const lightness = clamp(40 + y * 60, 40, 100);
-    const saturation = clamp(40 + normalizedSpeed * 60, 40, 100);
+    const audioColor = pointerId !== undefined && getVoiceColor ? getVoiceColor(pointerId) : null;
+    
+    if (audioColor) {
+      // GSI unified mapping: color derived from what the audio is actually doing
+      hue = audioColor.h;
+      lightness = audioColor.l;
+      saturation = audioColor.s;
+    } else {
+      // Fallback: position-based (used before audio is active)
+      const normalizedSpeed = clamp(speed * 10, 0, 1);
+      hue = x * 360;
+      lightness = clamp(40 + y * 60, 40, 100);
+      saturation = clamp(40 + normalizedSpeed * 60, 40, 100);
+    }
     
     setGestureColor(prev => {
       const next = {
@@ -88,7 +103,7 @@ export const XYPad: React.FC<XYPadProps> = ({
       gestureColorRef.current = next;
       return next;
     });
-  }, []);
+  }, [getVoiceColor]);
 
   // Get normalized coordinates from event
   const getNormalizedCoords = useCallback((clientX: number, clientY: number) => {
@@ -142,9 +157,7 @@ export const XYPad: React.FC<XYPadProps> = ({
       return next;
     });
 
-    updateGestureColor(x, y);
-
-    // Lock trail color for this specific pointer
+    updateGestureColor(x, y, id);
     trailColorsRef.current.set(id, { ...gestureColorRef.current });
 
     // Record trail point with this pointer's locked color
@@ -180,8 +193,8 @@ export const XYPad: React.FC<XYPadProps> = ({
       return next;
     });
     
-    // Update gesture color from position and movement
-    updateGestureColor(x, y);
+    // Update gesture color from audio state (GSI mapping)
+    updateGestureColor(x, y, id);
     
     // Record trail point with this pointer's locked color
     const tc = trailColorsRef.current.get(id);

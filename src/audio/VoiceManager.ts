@@ -26,6 +26,9 @@ export interface ManagedVoice {
   tremoloLFO?: OscillatorNode;
   tremoloGain?: GainNode;
   intensity: number; // 0-1 for vowel morphing
+  // Synesthetic feedback — derived from actual audio state
+  currentFrequency: number;  // Hz — the frequency being played
+  currentAmplitude: number;  // 0-1 — the current output level
 }
 
 class VoiceManagerClass {

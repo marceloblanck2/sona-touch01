@@ -34,6 +34,8 @@ export const SonaPad: React.FC = () => {
     handleTouchEnd,
     applySettings,
     stopAllSound,
+    getVoiceColor,
+    getAverageColor,
   } = useAudioEngine();
 
   const handleLoadPreset = useCallback((preset: Preset) => {
@@ -86,6 +88,7 @@ export const SonaPad: React.FC = () => {
               gridMode={gridMode}
               color={color}
               trailDuration={trailDuration}
+              getVoiceColor={getVoiceColor}
               onTouchStart={handleTouchStart}
               onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
@@ -142,6 +145,7 @@ export const SonaPad: React.FC = () => {
                 gridMode={gridMode}
                 color={color}
                 trailDuration={trailDuration}
+                getVoiceColor={getVoiceColor}
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}

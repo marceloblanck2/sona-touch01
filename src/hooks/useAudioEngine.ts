@@ -243,6 +243,15 @@ export function useAudioEngine() {
     applySynthColor(settings.color);
   }, []);
 
+  // Synesthetic color feedback — derived from audio state (GSI mapping)
+  const getVoiceColor = useCallback((touchId: number) => {
+    return audioEngine.getVoiceColor(touchId);
+  }, []);
+
+  const getAverageColor = useCallback(() => {
+    return audioEngine.getAverageColor();
+  }, []);
+
   return {
     isInitialized,
     isPlaying,
@@ -262,5 +271,7 @@ export function useAudioEngine() {
     handleTouchEnd,
     applySettings,
     stopAllSound,
+    getVoiceColor,
+    getAverageColor,
   };
 }

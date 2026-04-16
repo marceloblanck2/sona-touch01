@@ -9,7 +9,7 @@ import {
   PHI_HARMONICS,
   ZONE_BEHAVIORS 
 } from '../utils/constants';
-import { SynestheticParams } from '../utils/colorUtils';
+import { SynestheticParams, audioToColor, HSLColor } from '../utils/colorUtils';
 import { VoiceManager, ManagedVoice } from './VoiceManager';
 import { LoopManager } from './LoopManager';
 
@@ -380,6 +380,9 @@ export class AudioEngine {
       tremoloLFO,
       tremoloGain,
       intensity: 0.25, // Start calm/dark
+      // Synesthetic feedback — will be updated by updateVoiceFromXY
+      currentFrequency: this.synestheticParams.frequency,
+      currentAmplitude: 0.25,
     };
     
     VoiceManager.addVoice(touchId, voice);
@@ -482,6 +485,13 @@ export class AudioEngine {
     // Smoothly update intensity with slower interpolation for stability
     voice.intensity = voice.intensity + (newIntensity - voice.intensity) * 0.08;
     
+    // Update synesthetic feedback defaults (overridden if explicitly mapped)
+    voice.currentAmplitude = voice.intensity;
+    // If frequency is not mapped via XY, use the synesthetic base frequency
+    if (this.mappings.x !== 'frequency' && this.mappings.y !== 'frequency') {
+      voice.currentFrequency = this.synestheticParams.frequency;
+    }
+    
     // Update formants based on intensity (vowel morphing)
     this.updateFormants(voice);
     
@@ -495,6 +505,9 @@ export class AudioEngine {
           const baseFreq = this.synestheticParams.frequency;
           const freqMultiplier = 0.5 + value * 1.5; // 0.5x to 2x
           const freq = baseFreq * freqMultiplier;
+          
+          // Track current frequency for synesthetic feedback
+          voice.currentFrequency = freq;
           
           // Update main oscillators with proper detuning
           if (voice.oscillators[0]) {
@@ -536,6 +549,7 @@ export class AudioEngine {
           break;
           
         case 'amplitude':
+          voice.currentAmplitude = value;
           voice.masterGain.gain.setTargetAtTime(
             value * 0.35,
             this.audioContext!.currentTime,
@@ -769,6 +783,37 @@ export class AudioEngine {
   // Get active voice count from VoiceManager
   getActiveVoiceCount(): number {
     return VoiceManager.getActiveVoiceCount();
+  }
+
+  // Get synesthetic color derived from a voice's audio state (GSI mapping)
+  // Returns HSL where hue=frequency, lightness=amplitude, saturation=intensity
+  getVoiceColor(touchId: number): HSLColor | null {
+    const voice = VoiceManager.getVoice(touchId);
+    if (!voice || !voice.isActive) return null;
+    return audioToColor(voice.currentFrequency, voice.currentAmplitude, voice.intensity);
+  }
+
+  // Get the average synesthetic color across all active voices
+  getAverageColor(): HSLColor | null {
+    const ids = VoiceManager.getAllVoiceIds();
+    if (ids.length === 0) return null;
+    
+    let hueSum = 0, satSum = 0, lightSum = 0;
+    let count = 0;
+    
+    ids.forEach(id => {
+      const voice = VoiceManager.getVoice(id);
+      if (voice && voice.isActive) {
+        const c = audioToColor(voice.currentFrequency, voice.currentAmplitude, voice.intensity);
+        hueSum += c.h;
+        satSum += c.s;
+        lightSum += c.l;
+        count++;
+      }
+    });
+    
+    if (count === 0) return null;
+    return { h: Math.round(hueSum / count), s: Math.round(satSum / count), l: Math.round(lightSum / count) };
   }
 
   // Check if initialized
