@@ -1,9 +1,10 @@
-// SØNA Touch 01 - XY Pad Component with Multitouch Support
+// SØNA Touch 01 - XY Pad Component with Multitouch Support and Trail
 
 import React, { useRef, useCallback, useState } from 'react';
 import { GRID_3x3 } from '../../utils/constants';
 import { GridMode } from '../../utils/constants';
 import { HSLColor } from '../../utils/colorUtils';
+import { TrailCanvas } from './TrailCanvas';
 
 interface TouchPoint {
   id: number;
@@ -14,6 +15,7 @@ interface TouchPoint {
 interface XYPadProps {
   gridMode: GridMode;
   color: HSLColor;
+  trailDuration: number;
   onTouchStart: (id: number, x: number, y: number) => void;
   onTouchMove: (id: number, x: number, y: number) => void;
   onTouchEnd: (id: number) => void;
@@ -34,6 +36,7 @@ const clamp = (value: number, min: number, max: number): number =>
 export const XYPad: React.FC<XYPadProps> = ({
   gridMode,
   color,
+  trailDuration,
   onTouchStart,
   onTouchMove,
   onTouchEnd,
@@ -48,6 +51,7 @@ export const XYPad: React.FC<XYPadProps> = ({
   
   // Gesture color state with movement speed tracking
   const [gestureColor, setGestureColor] = useState<GestureColorState>({ hue: 0, saturation: 40, lightness: 70 });
+  const gestureColorRef = useRef<GestureColorState>({ hue: 0, saturation: 40, lightness: 70 });
   const lastPositionRef = useRef<{ x: number; y: number } | null>(null);
   
   // Update gesture color based on position and movement speed
@@ -71,12 +75,16 @@ export const XYPad: React.FC<XYPadProps> = ({
     const lightness = clamp(40 + y * 60, 40, 100);
     const saturation = clamp(40 + normalizedSpeed * 60, 40, 100);
     
-    setGestureColor(prev => ({
-      hue,
-      lightness,
-      // Smooth saturation transitions
-      saturation: prev.saturation * 0.7 + saturation * 0.3,
-    }));
+    setGestureColor(prev => {
+      const next = {
+        hue,
+        lightness,
+        // Smooth saturation transitions
+        saturation: prev.saturation * 0.7 + saturation * 0.3,
+      };
+      gestureColorRef.current = next;
+      return next;
+    });
   }, []);
 
   // Get normalized coordinates from event
@@ -133,6 +141,12 @@ export const XYPad: React.FC<XYPadProps> = ({
 
     updateGestureColor(x, y);
 
+    // Record trail point on initial touch
+    if ((window as any).__sonaTrailAdd) {
+      const gc = gestureColorRef.current;
+      (window as any).__sonaTrailAdd(x, y, gc.hue, gc.saturation, gc.lightness);
+    }
+
     setIsActive(true);
     onTouchStart(id, x, y);
 
@@ -162,6 +176,12 @@ export const XYPad: React.FC<XYPadProps> = ({
     
     // Update gesture color from position and movement
     updateGestureColor(x, y);
+    
+    // Record trail point
+    if ((window as any).__sonaTrailAdd) {
+      const gc = gestureColorRef.current;
+      (window as any).__sonaTrailAdd(x, y, gc.hue, gc.saturation, gc.lightness);
+    }
     
     onTouchMove(id, x, y);
   }, [getNormalizedCoords, onTouchMove]);
@@ -303,6 +323,9 @@ export const XYPad: React.FC<XYPadProps> = ({
       
       {/* Grid overlay */}
       {renderGrid()}
+      
+      {/* Trail canvas — persistent gesture traces */}
+      <TrailCanvas trailDuration={trailDuration} color={color} />
       
       {/* Touch points */}
       {renderTouchPoints()}

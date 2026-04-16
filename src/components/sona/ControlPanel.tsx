@@ -5,6 +5,7 @@ import { MappingSelector } from './MappingSelector';
 import { ModeToggle } from './ModeToggle';
 import { ColorPicker } from './ColorPicker';
 import { VolumeControl } from './VolumeControl';
+import { TrailControl } from './TrailControl';
 import { MappingOption, GridMode } from '../../utils/constants';
 import { HSLColor } from '../../utils/colorUtils';
 
@@ -14,11 +15,13 @@ interface ControlPanelProps {
   mode: GridMode;
   color: HSLColor;
   volume: number;
+  trailDuration: number;
   onMappingXChange: (value: MappingOption) => void;
   onMappingYChange: (value: MappingOption) => void;
   onModeChange: (mode: GridMode) => void;
   onColorChange: (color: HSLColor) => void;
   onVolumeChange: (volume: number) => void;
+  onTrailDurationChange: (duration: number) => void;
 }
 
 export const ControlPanel: React.FC<ControlPanelProps> = ({
@@ -27,11 +30,13 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   mode,
   color,
   volume,
+  trailDuration,
   onMappingXChange,
   onMappingYChange,
   onModeChange,
   onColorChange,
   onVolumeChange,
+  onTrailDurationChange,
 }) => {
   return (
     <div className="space-y-6">
@@ -68,6 +73,12 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
       <div className="space-y-2">
         <label className="text-xs text-muted-foreground uppercase tracking-wider">Volume</label>
         <VolumeControl volume={volume} onChange={onVolumeChange} color={color} />
+      </div>
+
+      {/* Trail Duration */}
+      <div className="space-y-2">
+        <label className="text-xs text-muted-foreground uppercase tracking-wider">Trail</label>
+        <TrailControl duration={trailDuration} onChange={onTrailDurationChange} color={color} />
       </div>
     </div>
   );

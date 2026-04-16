@@ -60,9 +60,7 @@ export class AudioEngine {
 
   // Initialize audio context (must be called after user interaction)
   async initialize(): Promise<void> {
-    console.log('[AudioEngine] initialize called');
     if (this.isInitialized) {
-      console.log('[AudioEngine] already initialized, skipping');
       return;
     }
 
@@ -72,9 +70,7 @@ export class AudioEngine {
       return;
     }
 
-    console.log('[AudioEngine] creating AudioContext');
     this.audioContext = new AudioContextClass();
-    console.log('[AudioEngine] initial state:', this.audioContext.state);
     
     VoiceManager.setAudioContext(this.audioContext);
     
@@ -87,7 +83,6 @@ export class AudioEngine {
     
     this.masterGain.connect(this.analyser);
     this.analyser.connect(this.audioContext.destination);
-    console.log('[AudioEngine] graph connected');
 
     // iOS silent unlock — play empty buffer to fully unlock audio pipeline
     try {
@@ -96,7 +91,6 @@ export class AudioEngine {
       source.buffer = buffer;
       source.connect(this.audioContext.destination);
       source.start(0);
-      console.log('[AudioEngine] silent unlock played');
     } catch (e) {
       console.warn('[AudioEngine] silent unlock failed:', String(e));
     }
@@ -104,16 +98,11 @@ export class AudioEngine {
     // CRITICAL: Mark initialized BEFORE attempting resume
     // On iOS, await resume() can hang indefinitely — we must not block on it
     this.isInitialized = true;
-    console.log('[AudioEngine] marked as initialized');
     
     // Fire resume WITHOUT awaiting — let it resolve in background
     if (this.audioContext.state === 'suspended') {
-      console.log('[AudioEngine] firing resume (non-blocking)');
       this.audioContext.resume()
-        .then(() => console.log('[AudioEngine] resume resolved, state:', this.audioContext?.state))
         .catch((e) => console.warn('[AudioEngine] resume rejected:', String(e)));
-    } else {
-      console.log('[AudioEngine] context already running');
     }
   }
 
@@ -182,7 +171,6 @@ export class AudioEngine {
 
   // Create a new voice for a touch point
   createVoice(touchId: number, x: number, y: number): Voice | null {
-    console.log('[createVoice] called, id:', touchId, 'state:', this.audioContext?.state);
     if (!this.audioContext || !this.masterGain) {
       console.error('[createVoice] missing context or masterGain');
       return null;
@@ -191,7 +179,6 @@ export class AudioEngine {
     // CRITICAL for iOS: force resume on every voice creation
     // This is the closest point to the user gesture in the call chain
     if (this.audioContext.state === 'suspended') {
-      console.log('[createVoice] forcing resume from suspended');
       this.audioContext.resume();
     }
 
@@ -398,7 +385,6 @@ export class AudioEngine {
     VoiceManager.addVoice(touchId, voice);
     this.updateVoiceFromXY(voice, x, y);
     
-    console.log('[createVoice] voice created, masterGain:', this.masterGain.gain.value);
     return voice;
   }
 
@@ -804,7 +790,6 @@ export class AudioEngine {
   ensureResumed(): Promise<void> {
     if (this.audioContext && this.audioContext.state === 'suspended') {
       this.audioContext.resume()
-        .then(() => console.log('[AudioEngine] resumed via ensureResumed'))
         .catch((e) => console.warn('[AudioEngine] ensureResumed failed:', String(e)));
     }
     return Promise.resolve();

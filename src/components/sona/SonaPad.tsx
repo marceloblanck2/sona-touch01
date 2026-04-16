@@ -14,6 +14,7 @@ import { Maximize2, Minimize2 } from 'lucide-react';
 
 export const SonaPad: React.FC = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [trailDuration, setTrailDuration] = useState(3); // default 3 seconds
   
   const {
     isInitialized,
@@ -84,6 +85,7 @@ export const SonaPad: React.FC = () => {
             <XYPad
               gridMode={gridMode}
               color={color}
+              trailDuration={trailDuration}
               onTouchStart={handleTouchStart}
               onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
@@ -139,6 +141,7 @@ export const SonaPad: React.FC = () => {
               <XYPad
                 gridMode={gridMode}
                 color={color}
+                trailDuration={trailDuration}
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
@@ -180,11 +183,13 @@ export const SonaPad: React.FC = () => {
                 mode={gridMode}
                 color={color}
                 volume={masterVolume}
+                trailDuration={trailDuration}
                 onMappingXChange={(v) => updateMapping('x', v)}
                 onMappingYChange={(v) => updateMapping('y', v)}
                 onModeChange={updateGridMode}
                 onColorChange={updateColor}
                 onVolumeChange={updateVolume}
+                onTrailDurationChange={setTrailDuration}
               />
             </div>
 

@@ -61,7 +61,6 @@ export function useAudioEngine() {
       if (pendingTouch.current) {
         const { id, x, y } = pendingTouch.current;
         pendingTouch.current = null;
-        console.log('[useAudioEngine] replaying pending touch:', id);
         activeTouches.current.add(id);
         audioEngine.createVoice(id, x, y);
         setActiveVoices(audioEngine.getActiveVoiceCount());
