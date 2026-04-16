@@ -188,6 +188,13 @@ export class AudioEngine {
       return null;
     }
 
+    // CRITICAL for iOS: force resume on every voice creation
+    // This is the closest point to the user gesture in the call chain
+    if (this.audioContext.state === 'suspended') {
+      console.log('[createVoice] forcing resume from suspended');
+      this.audioContext.resume();
+    }
+
     // Check if this pointer is already tracked
     if (this.activePointers.has(touchId)) {
       this.releaseVoice(touchId);
