@@ -27,6 +27,7 @@ export function useAudioEngine() {
   const voiceCountRef = useRef<number>();
   const activeTouches = useRef<Set<number>>(new Set());
   const audioUnlockNeeded = useRef(true);
+  const pendingTouch = useRef<{ id: number; x: number; y: number } | null>(null);
 
   // Ensure AudioContext is running - call on any user gesture
   const ensureAudioUnlocked = useCallback(async () => {
@@ -45,19 +46,26 @@ export function useAudioEngine() {
   const initialize = useCallback(async () => {
     if (!isInitialized) {
       await audioEngine.initialize();
-      // Ensure context is resumed after init
       await audioEngine.ensureResumed();
       audioUnlockNeeded.current = false;
-      
+
       setIsInitialized(true);
       setIsPlaying(true);
-      
+
       // Apply initial color
       const params = colorToAudioParams(color);
       audioEngine.setSynestheticParams(params);
       applySynthColor(color);
+
+      // Replay the pending touch that triggered initialization
+      if (pendingTouch.current) {
+        const { id, x, y } = pendingTouch.current;
+        pendingTouch.current = null;
+        activeTouches.current.add(id);
+        audioEngine.createVoice(id, x, y);
+        setActiveVoices(audioEngine.getActiveVoiceCount());
+      }
     } else {
-      // Already initialized, just ensure resumed
       await ensureAudioUnlocked();
     }
   }, [isInitialized, color, ensureAudioUnlocked]);
@@ -104,18 +112,22 @@ export function useAudioEngine() {
 
   // Touch handlers with duplicate prevention and audio unlock
   const handleTouchStart = useCallback(async (touchId: number, x: number, y: number) => {
-    if (!isInitialized) return;
-    
+    // If not initialized yet, store this touch to be replayed after init completes
+    if (!isInitialized) {
+      pendingTouch.current = { id: touchId, x, y };
+      return;
+    }
+
     // Prevent duplicate voice creation for same touch
     if (activeTouches.current.has(touchId)) {
       return;
     }
-    
+
     // Ensure audio is unlocked on first gesture after page visibility change
     if (audioUnlockNeeded.current) {
       await ensureAudioUnlocked();
     }
-    
+
     activeTouches.current.add(touchId);
     audioEngine.createVoice(touchId, x, y);
     setActiveVoices(audioEngine.getActiveVoiceCount());

@@ -102,50 +102,46 @@ export const XYPad: React.FC<XYPadProps> = ({
 
   // Handle pointer down
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    // Prevent non-primary inputs (right-click, etc.)
     if (!isValidInput(e)) {
       return;
     }
-    
+
     e.preventDefault();
     e.stopPropagation();
-    
+
     const id = e.pointerId;
-    
-    // Prevent duplicate handling of same pointer
+
     if (activePointers.current.has(id)) {
       return;
     }
-    
+
     if (!hasInteracted.current) {
       hasInteracted.current = true;
-      onInteractionStart();
     }
-    
+    // Call onInteractionStart on EVERY pointerdown to ensure audio context stays alive
+    onInteractionStart();
+
     const { x, y } = getNormalizedCoords(e.clientX, e.clientY);
-    
-    // Track this pointer locally
+
     activePointers.current.add(id);
-    
+
     setTouchPoints(prev => {
       const next = new Map(prev);
       next.set(id, { id, x, y });
       return next;
     });
-    
-    // Update gesture color from position
+
     updateGestureColor(x, y);
-    
+
     setIsActive(true);
     onTouchStart(id, x, y);
-    
-    // Capture pointer for tracking outside element
+
     try {
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
     } catch (err) {
-      // Pointer capture may fail in some cases, continue anyway
+      // Pointer capture may fail in some cases
     }
-  }, [getNormalizedCoords, onTouchStart, onInteractionStart, isValidInput]);
+  }, [getNormalizedCoords, onTouchStart, onInteractionStart, isValidInput, updateGestureColor]);
 
   // Handle pointer move
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
