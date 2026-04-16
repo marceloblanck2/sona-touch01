@@ -9,7 +9,7 @@ export interface ManagedVoice {
   gains: GainNode[];
   masterGain: GainNode;
   filter: BiquadFilterNode;
-  panner: StereoPannerNode | PannerNode;
+  panner: StereoPannerNode;
   isActive: boolean;
   x: number;
   y: number;

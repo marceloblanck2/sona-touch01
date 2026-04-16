@@ -74,8 +74,7 @@ export class AudioEngine {
 
     console.log('[AudioEngine] creating AudioContext');
     this.audioContext = new AudioContextClass();
-    console.log('[AudioEngine] state:', this.audioContext.state);
-    console.log('[AudioEngine] sampleRate:', this.audioContext.sampleRate);
+    console.log('[AudioEngine] initial state:', this.audioContext.state);
     
     VoiceManager.setAudioContext(this.audioContext);
     
@@ -90,7 +89,7 @@ export class AudioEngine {
     this.analyser.connect(this.audioContext.destination);
     console.log('[AudioEngine] graph connected');
 
-    // iOS silent unlock
+    // iOS silent unlock — play empty buffer to fully unlock audio pipeline
     try {
       const buffer = this.audioContext.createBuffer(1, 1, 22050);
       const source = this.audioContext.createBufferSource();
@@ -102,18 +101,19 @@ export class AudioEngine {
       console.warn('[AudioEngine] silent unlock failed:', String(e));
     }
     
+    // CRITICAL: Mark initialized BEFORE attempting resume
+    // On iOS, await resume() can hang indefinitely — we must not block on it
     this.isInitialized = true;
+    console.log('[AudioEngine] marked as initialized');
     
+    // Fire resume WITHOUT awaiting — let it resolve in background
     if (this.audioContext.state === 'suspended') {
-      console.log('[AudioEngine] resuming suspended context');
-      try {
-        await this.audioContext.resume();
-        console.log('[AudioEngine] resumed, state:', this.audioContext.state);
-      } catch (e) {
-        console.warn('[AudioEngine] resume failed:', String(e));
-      }
+      console.log('[AudioEngine] firing resume (non-blocking)');
+      this.audioContext.resume()
+        .then(() => console.log('[AudioEngine] resume resolved, state:', this.audioContext?.state))
+        .catch((e) => console.warn('[AudioEngine] resume rejected:', String(e)));
     } else {
-      console.log('[AudioEngine] context running, state:', this.audioContext.state);
+      console.log('[AudioEngine] context already running');
     }
   }
 
@@ -347,26 +347,9 @@ export class AudioEngine {
     const voiceGain = this.audioContext.createGain();
     voiceGain.gain.setValueAtTime(0, this.audioContext.currentTime);
     
-    // Stereo panner with iOS fallback
-    // StereoPannerNode has issues on iOS Safari — use PannerNode as fallback
-    let panner: StereoPannerNode | PannerNode;
-    
-    if (typeof this.audioContext.createStereoPanner === 'function') {
-      try {
-        panner = this.audioContext.createStereoPanner();
-        (panner as StereoPannerNode).pan.setValueAtTime((x - 0.5) * 2, this.audioContext.currentTime);
-      } catch (e) {
-        // Fallback to PannerNode
-        panner = this.audioContext.createPanner();
-        panner.panningModel = 'equalpower';
-        (panner as PannerNode).setPosition((x - 0.5) * 2, 0, 0);
-      }
-    } else {
-      // Legacy iOS: use PannerNode
-      panner = this.audioContext.createPanner();
-      panner.panningModel = 'equalpower';
-      (panner as PannerNode).setPosition((x - 0.5) * 2, 0, 0);
-    }
+    // Stereo panner
+    const panner = this.audioContext.createStereoPanner();
+    panner.pan.setValueAtTime((x - 0.5) * 2, this.audioContext.currentTime);
     
     filter.connect(voiceGain);
     voiceGain.connect(panner);
@@ -568,16 +551,11 @@ export class AudioEngine {
           break;
           
         case 'pan':
-          const panValue = (value - 0.5) * 2;
-          if ('pan' in voice.panner) {
-            (voice.panner as StereoPannerNode).pan.setTargetAtTime(
-              panValue,
-              this.audioContext!.currentTime,
-              RHYTHM.FAST
-            );
-          } else {
-            (voice.panner as PannerNode).setPosition(panValue, 0, 0);
-          }
+          voice.panner.pan.setTargetAtTime(
+            (value - 0.5) * 2,
+            this.audioContext!.currentTime,
+            RHYTHM.FAST
+          );
           break;
       }
     };
@@ -815,11 +793,14 @@ export class AudioEngine {
     this.audioContext?.resume();
   }
 
-  // Ensure audio context is resumed - awaitable
-  async ensureResumed(): Promise<void> {
+  // Ensure audio context is resumed — non-blocking for iOS compatibility
+  ensureResumed(): Promise<void> {
     if (this.audioContext && this.audioContext.state === 'suspended') {
-      await this.audioContext.resume();
+      this.audioContext.resume()
+        .then(() => console.log('[AudioEngine] resumed via ensureResumed'))
+        .catch((e) => console.warn('[AudioEngine] ensureResumed failed:', String(e)));
     }
+    return Promise.resolve();
   }
 
   // Check if audio context is suspended

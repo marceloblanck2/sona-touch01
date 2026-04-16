@@ -29,24 +29,24 @@ export function useAudioEngine() {
   const audioUnlockNeeded = useRef(true);
   const pendingTouch = useRef<{ id: number; x: number; y: number } | null>(null);
 
-  // Ensure AudioContext is running - call on any user gesture
-  const ensureAudioUnlocked = useCallback(async () => {
+  // Ensure AudioContext is running - call on any user gesture (non-blocking for iOS)
+  const ensureAudioUnlocked = useCallback(() => {
     if (!audioUnlockNeeded.current) return;
     
     try {
-      // Resume if suspended (browser autoplay policy)
-      await audioEngine.ensureResumed();
+      // Fire resume without awaiting — iOS hangs on await resume()
+      audioEngine.ensureResumed();
       audioUnlockNeeded.current = false;
     } catch (e) {
       console.warn('Audio unlock failed:', e);
     }
   }, []);
 
-  // Initialize audio engine with reliable unlock
+  // Initialize audio engine — non-blocking resume for iOS compatibility
   const initialize = useCallback(async () => {
     if (!isInitialized) {
+      // initialize() now handles resume non-blockingly inside
       await audioEngine.initialize();
-      await audioEngine.ensureResumed();
       audioUnlockNeeded.current = false;
 
       setIsInitialized(true);
@@ -61,12 +61,13 @@ export function useAudioEngine() {
       if (pendingTouch.current) {
         const { id, x, y } = pendingTouch.current;
         pendingTouch.current = null;
+        console.log('[useAudioEngine] replaying pending touch:', id);
         activeTouches.current.add(id);
         audioEngine.createVoice(id, x, y);
         setActiveVoices(audioEngine.getActiveVoiceCount());
       }
     } else {
-      await ensureAudioUnlocked();
+      ensureAudioUnlocked();
     }
   }, [isInitialized, color, ensureAudioUnlocked]);
 
