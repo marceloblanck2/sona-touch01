@@ -60,50 +60,60 @@ export class AudioEngine {
 
   // Initialize audio context (must be called after user interaction)
   async initialize(): Promise<void> {
-    if (this.isInitialized) return;
-
-    // iOS Safari fallback for older versions
-    const AudioContextClass = (window.AudioContext || (window as any).webkitAudioContext);
-    if (!AudioContextClass) {
-      console.error('Web Audio API not supported');
+    console.log('[AudioEngine] initialize called');
+    if (this.isInitialized) {
+      console.log('[AudioEngine] already initialized, skipping');
       return;
     }
 
+    const AudioContextClass = (window.AudioContext || (window as any).webkitAudioContext);
+    if (!AudioContextClass) {
+      console.error('[AudioEngine] Web Audio API not supported');
+      return;
+    }
+
+    console.log('[AudioEngine] creating AudioContext');
     this.audioContext = new AudioContextClass();
+    console.log('[AudioEngine] state:', this.audioContext.state);
+    console.log('[AudioEngine] sampleRate:', this.audioContext.sampleRate);
+    
     VoiceManager.setAudioContext(this.audioContext);
     
-    // Master gain — use setValueAtTime for iOS compatibility
     this.masterGain = this.audioContext.createGain();
     this.masterGain.gain.setValueAtTime(0.5, this.audioContext.currentTime);
     
-    // Analyser for waveform visualization
     this.analyser = this.audioContext.createAnalyser();
     this.analyser.fftSize = 2048;
     this.analyser.smoothingTimeConstant = 0.8;
     
     this.masterGain.connect(this.analyser);
     this.analyser.connect(this.audioContext.destination);
-    
-    // iOS SILENT UNLOCK — play empty buffer to fully unlock audio pipeline
+    console.log('[AudioEngine] graph connected');
+
+    // iOS silent unlock
     try {
       const buffer = this.audioContext.createBuffer(1, 1, 22050);
       const source = this.audioContext.createBufferSource();
       source.buffer = buffer;
       source.connect(this.audioContext.destination);
       source.start(0);
+      console.log('[AudioEngine] silent unlock played');
     } catch (e) {
-      console.warn('Silent unlock failed:', e);
+      console.warn('[AudioEngine] silent unlock failed:', String(e));
     }
     
     this.isInitialized = true;
     
-    // Resume if suspended
     if (this.audioContext.state === 'suspended') {
+      console.log('[AudioEngine] resuming suspended context');
       try {
         await this.audioContext.resume();
+        console.log('[AudioEngine] resumed, state:', this.audioContext.state);
       } catch (e) {
-        console.warn('Resume failed:', e);
+        console.warn('[AudioEngine] resume failed:', String(e));
       }
+    } else {
+      console.log('[AudioEngine] context running, state:', this.audioContext.state);
     }
   }
 
@@ -172,7 +182,11 @@ export class AudioEngine {
 
   // Create a new voice for a touch point
   createVoice(touchId: number, x: number, y: number): Voice | null {
-    if (!this.audioContext || !this.masterGain) return null;
+    console.log('[createVoice] called, id:', touchId, 'state:', this.audioContext?.state);
+    if (!this.audioContext || !this.masterGain) {
+      console.error('[createVoice] missing context or masterGain');
+      return null;
+    }
 
     // Check if this pointer is already tracked
     if (this.activePointers.has(touchId)) {
@@ -394,6 +408,7 @@ export class AudioEngine {
     VoiceManager.addVoice(touchId, voice);
     this.updateVoiceFromXY(voice, x, y);
     
+    console.log('[createVoice] voice created, masterGain:', this.masterGain.gain.value);
     return voice;
   }
 
