@@ -62,12 +62,19 @@ export class AudioEngine {
   async initialize(): Promise<void> {
     if (this.isInitialized) return;
 
-    this.audioContext = new AudioContext();
+    // iOS Safari fallback for older versions
+    const AudioContextClass = (window.AudioContext || (window as any).webkitAudioContext);
+    if (!AudioContextClass) {
+      console.error('Web Audio API not supported');
+      return;
+    }
+
+    this.audioContext = new AudioContextClass();
     VoiceManager.setAudioContext(this.audioContext);
     
-    // Master gain
+    // Master gain — use setValueAtTime for iOS compatibility
     this.masterGain = this.audioContext.createGain();
-    this.masterGain.gain.value = 0.5;
+    this.masterGain.gain.setValueAtTime(0.5, this.audioContext.currentTime);
     
     // Analyser for waveform visualization
     this.analyser = this.audioContext.createAnalyser();
@@ -77,7 +84,27 @@ export class AudioEngine {
     this.masterGain.connect(this.analyser);
     this.analyser.connect(this.audioContext.destination);
     
+    // iOS SILENT UNLOCK — play empty buffer to fully unlock audio pipeline
+    try {
+      const buffer = this.audioContext.createBuffer(1, 1, 22050);
+      const source = this.audioContext.createBufferSource();
+      source.buffer = buffer;
+      source.connect(this.audioContext.destination);
+      source.start(0);
+    } catch (e) {
+      console.warn('Silent unlock failed:', e);
+    }
+    
     this.isInitialized = true;
+    
+    // Resume if suspended
+    if (this.audioContext.state === 'suspended') {
+      try {
+        await this.audioContext.resume();
+      } catch (e) {
+        console.warn('Resume failed:', e);
+      }
+    }
   }
 
   // Get analyzer for visualization
@@ -304,11 +331,28 @@ export class AudioEngine {
     
     // Voice master gain
     const voiceGain = this.audioContext.createGain();
-    voiceGain.gain.value = 0;
+    voiceGain.gain.setValueAtTime(0, this.audioContext.currentTime);
     
-    // Stereo panner
-    const panner = this.audioContext.createStereoPanner();
-    panner.pan.value = (x - 0.5) * 2;
+    // Stereo panner with iOS fallback
+    // StereoPannerNode has issues on iOS Safari — use PannerNode as fallback
+    let panner: StereoPannerNode | PannerNode;
+    
+    if (typeof this.audioContext.createStereoPanner === 'function') {
+      try {
+        panner = this.audioContext.createStereoPanner();
+        (panner as StereoPannerNode).pan.setValueAtTime((x - 0.5) * 2, this.audioContext.currentTime);
+      } catch (e) {
+        // Fallback to PannerNode
+        panner = this.audioContext.createPanner();
+        panner.panningModel = 'equalpower';
+        (panner as PannerNode).setPosition((x - 0.5) * 2, 0, 0);
+      }
+    } else {
+      // Legacy iOS: use PannerNode
+      panner = this.audioContext.createPanner();
+      panner.panningModel = 'equalpower';
+      (panner as PannerNode).setPosition((x - 0.5) * 2, 0, 0);
+    }
     
     filter.connect(voiceGain);
     voiceGain.connect(panner);
@@ -509,11 +553,16 @@ export class AudioEngine {
           break;
           
         case 'pan':
-          voice.panner.pan.setTargetAtTime(
-            (value - 0.5) * 2,
-            this.audioContext!.currentTime,
-            RHYTHM.FAST
-          );
+          const panValue = (value - 0.5) * 2;
+          if ('pan' in voice.panner) {
+            (voice.panner as StereoPannerNode).pan.setTargetAtTime(
+              panValue,
+              this.audioContext!.currentTime,
+              RHYTHM.FAST
+            );
+          } else {
+            (voice.panner as PannerNode).setPosition(panValue, 0, 0);
+          }
           break;
       }
     };
