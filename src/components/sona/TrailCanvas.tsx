@@ -72,7 +72,7 @@ export const TrailCanvas: React.FC<TrailCanvasProps> = ({
       x, y,
       hue, saturation, lightness,
       timestamp: performance.now(),
-      size: 6 + Math.random() * 2, // small trail dots (organic variation)
+      size: 24 + Math.random() * 8, // 80% of original size
     });
   }, []);
 

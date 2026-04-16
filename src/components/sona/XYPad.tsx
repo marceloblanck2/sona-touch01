@@ -54,8 +54,8 @@ export const XYPad: React.FC<XYPadProps> = ({
   const gestureColorRef = useRef<GestureColorState>({ hue: 0, saturation: 40, lightness: 70 });
   const lastPositionRef = useRef<{ x: number; y: number } | null>(null);
   
-  // Trail color: locked at the moment of first touch, stays fixed for entire gesture
-  const trailColorRef = useRef<GestureColorState | null>(null);
+  // Trail color: locked per pointer at moment of touch, stays fixed for each finger
+  const trailColorsRef = useRef<Map<number, GestureColorState>>(new Map());
   
   // Update gesture color based on position and movement speed
   const updateGestureColor = useCallback((x: number, y: number) => {
@@ -144,12 +144,12 @@ export const XYPad: React.FC<XYPadProps> = ({
 
     updateGestureColor(x, y);
 
-    // Lock trail color at the moment of touch — stays fixed for this gesture
-    trailColorRef.current = { ...gestureColorRef.current };
+    // Lock trail color for this specific pointer
+    trailColorsRef.current.set(id, { ...gestureColorRef.current });
 
-    // Record trail point with locked color
+    // Record trail point with this pointer's locked color
     if ((window as any).__sonaTrailAdd) {
-      const tc = trailColorRef.current;
+      const tc = trailColorsRef.current.get(id)!;
       (window as any).__sonaTrailAdd(x, y, tc.hue, tc.saturation, tc.lightness);
     }
 
@@ -183,9 +183,9 @@ export const XYPad: React.FC<XYPadProps> = ({
     // Update gesture color from position and movement
     updateGestureColor(x, y);
     
-    // Record trail point with locked color from initial touch
-    if ((window as any).__sonaTrailAdd && trailColorRef.current) {
-      const tc = trailColorRef.current;
+    // Record trail point with this pointer's locked color
+    const tc = trailColorsRef.current.get(id);
+    if ((window as any).__sonaTrailAdd && tc) {
       (window as any).__sonaTrailAdd(x, y, tc.hue, tc.saturation, tc.lightness);
     }
     
@@ -203,6 +203,7 @@ export const XYPad: React.FC<XYPadProps> = ({
     
     // Remove from local tracking
     activePointers.current.delete(id);
+    trailColorsRef.current.delete(id);
     
     setTouchPoints(prev => {
       const next = new Map(prev);
@@ -210,7 +211,6 @@ export const XYPad: React.FC<XYPadProps> = ({
       if (next.size === 0) {
         setIsActive(false);
         lastPositionRef.current = null;
-        trailColorRef.current = null; // Reset trail color for next gesture
       }
       return next;
     });
