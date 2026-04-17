@@ -62,7 +62,7 @@ export function useAudioEngine() {
         const { id, x, y } = pendingTouch.current;
         pendingTouch.current = null;
         activeTouches.current.add(id);
-        audioEngine.createVoice(id, x, y);
+        await audioEngine.createVoice(id, x, y);
         setActiveVoices(audioEngine.getActiveVoiceCount());
       }
     } else {
@@ -129,7 +129,7 @@ export function useAudioEngine() {
     }
 
     activeTouches.current.add(touchId);
-    audioEngine.createVoice(touchId, x, y);
+    await audioEngine.createVoice(touchId, x, y);
     setActiveVoices(audioEngine.getActiveVoiceCount());
   }, [isInitialized, ensureAudioUnlocked]);
 
