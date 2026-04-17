@@ -1,11 +1,12 @@
-// SØNA Pad v2 - Main Application Component
+// SØM Touch - Main Application Component
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { Header } from './Header';
 import { XYPad } from './XYPad';
 import { Waveform } from './Waveform';
 import { ControlPanel } from './ControlPanel';
+import { FullscreenControls } from './FullscreenControls';
 import { PresetPanel } from './PresetPanel';
 import { VoiceIndicator } from './VoiceIndicator';
 import { Preset } from '../../presets/PresetManager';
@@ -15,6 +16,16 @@ import { Maximize2, Minimize2 } from 'lucide-react';
 export const SonaPad: React.FC = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [trailDuration, setTrailDuration] = useState(3); // default 3 seconds
+  const [glowSize, setGlowSize] = useState(1.0); // 1.0 = 100% default size
+  const [isLandscape, setIsLandscape] = useState(false);
+
+  // Detect orientation for responsive fullscreen layout
+  useEffect(() => {
+    const check = () => setIsLandscape(window.innerWidth > window.innerHeight);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
   
   const {
     isInitialized,
@@ -47,47 +58,53 @@ export const SonaPad: React.FC = () => {
     });
   }, [applySettings]);
 
-  // Fullscreen Mode
+  // Fullscreen Mode — responsive layout
   if (isFullscreen) {
+    const fullscreenBg = `
+      radial-gradient(ellipse at 50% 50%, hsl(${color.h} ${color.s}% ${color.l}% / 0.08) 0%, transparent 60%),
+      hsl(220 20% 6%)
+    `;
+
     return (
       <div 
-        className="fixed inset-0 z-50 flex flex-col"
+        className={`fixed inset-0 z-50 flex ${isLandscape ? 'flex-row' : 'flex-col'}`}
         style={{
-          background: `
-            radial-gradient(ellipse at 50% 50%, hsl(${color.h} ${color.s}% ${color.l}% / 0.08) 0%, transparent 60%),
-            hsl(220 20% 6%)
-          `,
+          background: fullscreenBg,
           paddingTop: 'env(safe-area-inset-top)',
           paddingBottom: 'env(safe-area-inset-bottom)',
           paddingLeft: 'env(safe-area-inset-left)',
           paddingRight: 'env(safe-area-inset-right)',
         }}
       >
-        {/* Minimal top bar */}
-        <div className="flex items-center justify-between px-4 py-3">
-          <span 
-            className="font-mono text-xs uppercase tracking-wider opacity-60"
-            style={{ color: `hsl(${color.h} ${color.s}% ${color.l}%)` }}
-          >
-            {gridMode}
-          </span>
-          <button
-            onClick={() => setIsFullscreen(false)}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-background/20 hover:bg-background/40 transition-colors"
-            style={{ color: `hsl(${color.h} ${color.s}% ${color.l}%)` }}
-          >
-            <Minimize2 className="w-4 h-4" />
-            <span className="text-xs font-medium">Exit</span>
-          </button>
-        </div>
+        {/* Landscape: controls on the LEFT */}
+        {isLandscape && (
+          <FullscreenControls
+            color={color}
+            gridMode={gridMode}
+            volume={masterVolume}
+            trailDuration={trailDuration}
+            glowSize={glowSize}
+            mappingX={mappings.x}
+            mappingY={mappings.y}
+            onModeChange={updateGridMode}
+            onVolumeChange={updateVolume}
+            onTrailChange={setTrailDuration}
+            onSizeChange={setGlowSize}
+            onMappingXChange={(v) => updateMapping('x', v)}
+            onMappingYChange={(v) => updateMapping('y', v)}
+            onExit={() => setIsFullscreen(false)}
+            isLandscape={true}
+          />
+        )}
         
-        {/* Fullscreen XY Pad */}
-        <div className="flex-1 p-2">
+        {/* XY Pad — takes remaining space */}
+        <div className="flex-1 p-1">
           <div className="h-full w-full">
             <XYPad
               gridMode={gridMode}
               color={color}
               trailDuration={trailDuration}
+              glowSize={glowSize}
               getVoiceColor={getVoiceColor}
               onTouchStart={handleTouchStart}
               onTouchMove={handleTouchMove}
@@ -97,6 +114,27 @@ export const SonaPad: React.FC = () => {
             />
           </div>
         </div>
+
+        {/* Portrait: controls on the BOTTOM */}
+        {!isLandscape && (
+          <FullscreenControls
+            color={color}
+            gridMode={gridMode}
+            volume={masterVolume}
+            trailDuration={trailDuration}
+            glowSize={glowSize}
+            mappingX={mappings.x}
+            mappingY={mappings.y}
+            onModeChange={updateGridMode}
+            onVolumeChange={updateVolume}
+            onTrailChange={setTrailDuration}
+            onSizeChange={setGlowSize}
+            onMappingXChange={(v) => updateMapping('x', v)}
+            onMappingYChange={(v) => updateMapping('y', v)}
+            onExit={() => setIsFullscreen(false)}
+            isLandscape={false}
+          />
+        )}
       </div>
     );
   }
@@ -145,6 +183,7 @@ export const SonaPad: React.FC = () => {
                 gridMode={gridMode}
                 color={color}
                 trailDuration={trailDuration}
+                glowSize={glowSize}
                 getVoiceColor={getVoiceColor}
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
@@ -188,12 +227,14 @@ export const SonaPad: React.FC = () => {
                 color={color}
                 volume={masterVolume}
                 trailDuration={trailDuration}
+                glowSize={glowSize}
                 onMappingXChange={(v) => updateMapping('x', v)}
                 onMappingYChange={(v) => updateMapping('y', v)}
                 onModeChange={updateGridMode}
                 onColorChange={updateColor}
                 onVolumeChange={updateVolume}
                 onTrailDurationChange={setTrailDuration}
+                onGlowSizeChange={setGlowSize}
               />
             </div>
 

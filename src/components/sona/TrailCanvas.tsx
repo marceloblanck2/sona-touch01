@@ -18,6 +18,7 @@ interface TrailPoint {
 
 interface TrailCanvasProps {
   trailDuration: number;  // seconds — how long trails persist
+  glowSize: number;       // multiplier for trail point size
   color: HSLColor;        // fallback color
 }
 
@@ -58,6 +59,7 @@ const trailBuffer = new TrailBuffer();
 
 export const TrailCanvas: React.FC<TrailCanvasProps> = ({
   trailDuration,
+  glowSize,
   color,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -131,7 +133,7 @@ export const TrailCanvas: React.FC<TrailCanvasProps> = ({
         const easedLife = life * life; // quadratic ease-out for natural fade
 
         // Size grows slightly as it fades (like smoke dissipating)
-        const size = point.size * (1 + (1 - life) * 0.5);
+        const size = point.size * glowSize * (1 + (1 - life) * 0.5);
 
         const px = point.x * rect.width;
         const py = point.y * rect.height;
@@ -156,7 +158,7 @@ export const TrailCanvas: React.FC<TrailCanvasProps> = ({
     return () => {
       cancelAnimationFrame(animFrameRef.current);
     };
-  }, [trailDuration]);
+  }, [trailDuration, glowSize]);
 
   return (
     <canvas

@@ -16,6 +16,7 @@ interface XYPadProps {
   gridMode: GridMode;
   color: HSLColor;
   trailDuration: number;
+  glowSize: number;
   getVoiceColor?: (touchId: number) => { h: number; s: number; l: number } | null;
   onTouchStart: (id: number, x: number, y: number) => void;
   onTouchMove: (id: number, x: number, y: number) => void;
@@ -38,6 +39,7 @@ export const XYPad: React.FC<XYPadProps> = ({
   gridMode,
   color,
   trailDuration,
+  glowSize,
   getVoiceColor,
   onTouchStart,
   onTouchMove,
@@ -292,7 +294,8 @@ export const XYPad: React.FC<XYPadProps> = ({
   // Render touch points with gesture-driven vivid color
   const renderTouchPoints = () => {
     return Array.from(touchPoints.values()).map(point => {
-      const size = 60 + Math.sin(Date.now() / 500) * 10;
+      const baseSize = 60 + Math.sin(Date.now() / 500) * 10;
+      const size = baseSize * glowSize;
       
       return (
         <div
@@ -345,7 +348,7 @@ export const XYPad: React.FC<XYPadProps> = ({
       {renderGrid()}
       
       {/* Trail canvas — persistent gesture traces */}
-      <TrailCanvas trailDuration={trailDuration} color={color} />
+      <TrailCanvas trailDuration={trailDuration} glowSize={glowSize} color={color} />
       
       {/* Touch points */}
       {renderTouchPoints()}
