@@ -98,11 +98,13 @@ export class AudioEngine {
     // CRITICAL: Mark initialized BEFORE attempting resume
     // On iOS, await resume() can hang indefinitely — we must not block on it
     this.isInitialized = true;
-    
-    // Fire resume WITHOUT awaiting — let it resolve in background
+
     if (this.audioContext.state === 'suspended') {
-      this.audioContext.resume()
-        .catch((e) => console.warn('[AudioEngine] resume rejected:', String(e)));
+      try {
+        await this.audioContext.resume();
+      } catch (e) {
+        console.warn('[AudioEngine] resume rejected:', String(e));
+      }
     }
   }
 
