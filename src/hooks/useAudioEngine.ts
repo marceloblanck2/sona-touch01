@@ -129,7 +129,7 @@ export function useAudioEngine() {
     }
 
     activeTouches.current.add(touchId);
-    audioEngine.createVoice(touchId, x, y);
+    await audioEngine.createVoice(touchId, x, y);
     setActiveVoices(audioEngine.getActiveVoiceCount());
   }, [isInitialized, ensureAudioUnlocked]);
 
