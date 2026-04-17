@@ -172,16 +172,19 @@ export class AudioEngine {
   }
 
   // Create a new voice for a touch point
-  createVoice(touchId: number, x: number, y: number): Voice | null {
+  async createVoice(touchId: number, x: number, y: number): Promise<Voice | null> {
     if (!this.audioContext || !this.masterGain) {
       console.error('[createVoice] missing context or masterGain');
       return null;
     }
 
-    // CRITICAL for iOS: force resume on every voice creation
-    // This is the closest point to the user gesture in the call chain
+    // CRITICAL for iOS: await resume before creating oscillators
     if (this.audioContext.state === 'suspended') {
-      this.audioContext.resume();
+      try {
+        await this.audioContext.resume();
+      } catch (e) {
+        console.warn('[createVoice] resume failed:', String(e));
+      }
     }
 
     // Check if this pointer is already tracked
