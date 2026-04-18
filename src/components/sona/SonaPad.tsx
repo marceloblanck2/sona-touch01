@@ -12,6 +12,7 @@ import { VoiceIndicator } from './VoiceIndicator';
 import { Preset } from '../../presets/PresetManager';
 import { MappingOption, GridMode } from '../../utils/constants';
 import { Maximize2, Minimize2 } from 'lucide-react';
+import { DebugOverlay } from '../DebugOverlay';
 
 export const SonaPad: React.FC = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -76,6 +77,7 @@ export const SonaPad: React.FC = () => {
           paddingRight: 'env(safe-area-inset-right)',
         }}
       >
+        <DebugOverlay />
         {/* Landscape: controls on the LEFT */}
         {isLandscape && (
           <FullscreenControls
@@ -151,6 +153,7 @@ export const SonaPad: React.FC = () => {
       }}
     >
       <div className="max-w-7xl mx-auto">
+        <DebugOverlay />
         <Header 
           activeVoices={activeVoices} 
           color={color} 
