@@ -170,8 +170,13 @@ export const SonaPad: React.FC = () => {
             >
               {/* Fullscreen Toggle Button */}
               <button
-                onClick={() => setIsFullscreen(true)}
-                className="absolute top-2 right-2 z-10 flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-background/40 hover:bg-background/60 transition-colors backdrop-blur-sm"
+                type="button"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsFullscreen(true);
+                }}
+                className="absolute top-2 right-2 z-20 flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-background/40 hover:bg-background/60 transition-colors backdrop-blur-sm touch-manipulation"
                 style={{ color: `hsl(${color.h} ${color.s}% ${color.l}%)` }}
                 title="Enter Focus Mode"
               >
