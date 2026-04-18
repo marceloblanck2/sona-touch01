@@ -12,6 +12,7 @@ import { VoiceIndicator } from './VoiceIndicator';
 import { Preset } from '../../presets/PresetManager';
 import { MappingOption, GridMode } from '../../utils/constants';
 import { Maximize2, Minimize2 } from 'lucide-react';
+import { DebugOverlay } from '../DebugOverlay';
 
 export const SonaPad: React.FC = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);

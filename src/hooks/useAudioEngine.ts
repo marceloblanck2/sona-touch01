@@ -116,6 +116,7 @@ export function useAudioEngine() {
 
   // Touch handlers with duplicate prevention and audio unlock
   const handleTouchStart = useCallback(async (touchId: number, x: number, y: number) => {
+    (window as any).__lastPointerDown = performance.now();
     try {
       // If not initialized yet, store this touch to be replayed after init completes
       if (!isInitialized) {

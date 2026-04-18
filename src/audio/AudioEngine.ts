@@ -359,6 +359,7 @@ export class AudioEngine {
     noiseSource.start();
     vibratoLFO.start();
     tremoloLFO.start();
+    (window as any).__lastOscStart = performance.now();
     
     // Smooth attack
     voiceGain.gain.setTargetAtTime(0.25, this.audioContext.currentTime, RHYTHM.ATTACK);
@@ -476,6 +477,15 @@ export class AudioEngine {
   // Check if a pointer is currently active
   isPointerActive(pointerId: number): boolean {
     return this.activePointers.has(pointerId);
+  }
+
+  // Debug snapshot — read-only state for DebugOverlay
+  getState(): { ctxState: string; sampleRate: number; isInitialized: boolean } {
+    return {
+      ctxState: this.audioContext?.state ?? 'none',
+      sampleRate: this.audioContext?.sampleRate ?? 0,
+      isInitialized: this.isInitialized,
+    };
   }
 
   // Private: Update voice from XY position based on mappings
