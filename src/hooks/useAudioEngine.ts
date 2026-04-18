@@ -112,25 +112,29 @@ export function useAudioEngine() {
 
   // Touch handlers with duplicate prevention and audio unlock
   const handleTouchStart = useCallback(async (touchId: number, x: number, y: number) => {
-    // If not initialized yet, store this touch to be replayed after init completes
-    if (!isInitialized) {
-      pendingTouch.current = { id: touchId, x, y };
-      return;
-    }
+    try {
+      // If not initialized yet, store this touch to be replayed after init completes
+      if (!isInitialized) {
+        pendingTouch.current = { id: touchId, x, y };
+        return;
+      }
 
-    // Prevent duplicate voice creation for same touch
-    if (activeTouches.current.has(touchId)) {
-      return;
-    }
+      // Prevent duplicate voice creation for same touch
+      if (activeTouches.current.has(touchId)) {
+        return;
+      }
 
-    // Ensure audio is unlocked on first gesture after page visibility change
-    if (audioUnlockNeeded.current) {
-      await ensureAudioUnlocked();
-    }
+      // Ensure audio is unlocked on first gesture after page visibility change
+      if (audioUnlockNeeded.current) {
+        await ensureAudioUnlocked();
+      }
 
-    activeTouches.current.add(touchId);
-    await audioEngine.createVoice(touchId, x, y);
-    setActiveVoices(audioEngine.getActiveVoiceCount());
+      activeTouches.current.add(touchId);
+      await audioEngine.createVoice(touchId, x, y);
+      setActiveVoices(audioEngine.getActiveVoiceCount());
+    } catch (e) {
+      console.warn('[handleTouchStart] error:', e);
+    }
   }, [isInitialized, ensureAudioUnlocked]);
 
   const handleTouchMove = useCallback((touchId: number, x: number, y: number) => {
