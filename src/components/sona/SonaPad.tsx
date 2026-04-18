@@ -77,6 +77,7 @@ export const SonaPad: React.FC = () => {
           paddingRight: 'env(safe-area-inset-right)',
         }}
       >
+        <DebugOverlay />
         {/* Landscape: controls on the LEFT */}
         {isLandscape && (
           <FullscreenControls
@@ -152,6 +153,7 @@ export const SonaPad: React.FC = () => {
       }}
     >
       <div className="max-w-7xl mx-auto">
+        <DebugOverlay />
         <Header 
           activeVoices={activeVoices} 
           color={color} 
