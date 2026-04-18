@@ -44,29 +44,33 @@ export function useAudioEngine() {
 
   // Initialize audio engine — non-blocking resume for iOS compatibility
   const initialize = useCallback(async () => {
-    if (!isInitialized) {
-      // initialize() now handles resume non-blockingly inside
-      await audioEngine.initialize();
-      audioUnlockNeeded.current = false;
+    try {
+      if (!isInitialized) {
+        // initialize() now handles resume non-blockingly inside
+        await audioEngine.initialize();
+        audioUnlockNeeded.current = false;
 
-      setIsInitialized(true);
-      setIsPlaying(true);
+        setIsInitialized(true);
+        setIsPlaying(true);
 
-      // Apply initial color
-      const params = colorToAudioParams(color);
-      audioEngine.setSynestheticParams(params);
-      applySynthColor(color);
+        // Apply initial color
+        const params = colorToAudioParams(color);
+        audioEngine.setSynestheticParams(params);
+        applySynthColor(color);
 
-      // Replay the pending touch that triggered initialization
-      if (pendingTouch.current) {
-        const { id, x, y } = pendingTouch.current;
-        pendingTouch.current = null;
-        activeTouches.current.add(id);
-        await audioEngine.createVoice(id, x, y);
-        setActiveVoices(audioEngine.getActiveVoiceCount());
+        // Replay the pending touch that triggered initialization
+        if (pendingTouch.current) {
+          const { id, x, y } = pendingTouch.current;
+          pendingTouch.current = null;
+          activeTouches.current.add(id);
+          await audioEngine.createVoice(id, x, y);
+          setActiveVoices(audioEngine.getActiveVoiceCount());
+        }
+      } else {
+        ensureAudioUnlocked();
       }
-    } else {
-      ensureAudioUnlocked();
+    } catch (e) {
+      console.warn('[initialize] error:', e);
     }
   }, [isInitialized, color, ensureAudioUnlocked]);
 
