@@ -44,29 +44,33 @@ export function useAudioEngine() {
 
   // Initialize audio engine — non-blocking resume for iOS compatibility
   const initialize = useCallback(async () => {
-    if (!isInitialized) {
-      // initialize() now handles resume non-blockingly inside
-      await audioEngine.initialize();
-      audioUnlockNeeded.current = false;
+    try {
+      if (!isInitialized) {
+        // initialize() now handles resume non-blockingly inside
+        await audioEngine.initialize();
+        audioUnlockNeeded.current = false;
 
-      setIsInitialized(true);
-      setIsPlaying(true);
+        setIsInitialized(true);
+        setIsPlaying(true);
 
-      // Apply initial color
-      const params = colorToAudioParams(color);
-      audioEngine.setSynestheticParams(params);
-      applySynthColor(color);
+        // Apply initial color
+        const params = colorToAudioParams(color);
+        audioEngine.setSynestheticParams(params);
+        applySynthColor(color);
 
-      // Replay the pending touch that triggered initialization
-      if (pendingTouch.current) {
-        const { id, x, y } = pendingTouch.current;
-        pendingTouch.current = null;
-        activeTouches.current.add(id);
-        await audioEngine.createVoice(id, x, y);
-        setActiveVoices(audioEngine.getActiveVoiceCount());
+        // Replay the pending touch that triggered initialization
+        if (pendingTouch.current) {
+          const { id, x, y } = pendingTouch.current;
+          pendingTouch.current = null;
+          activeTouches.current.add(id);
+          await audioEngine.createVoice(id, x, y);
+          setActiveVoices(audioEngine.getActiveVoiceCount());
+        }
+      } else {
+        ensureAudioUnlocked();
       }
-    } else {
-      ensureAudioUnlocked();
+    } catch (e) {
+      console.warn('[initialize] error:', e);
     }
   }, [isInitialized, color, ensureAudioUnlocked]);
 
@@ -112,25 +116,29 @@ export function useAudioEngine() {
 
   // Touch handlers with duplicate prevention and audio unlock
   const handleTouchStart = useCallback(async (touchId: number, x: number, y: number) => {
-    // If not initialized yet, store this touch to be replayed after init completes
-    if (!isInitialized) {
-      pendingTouch.current = { id: touchId, x, y };
-      return;
-    }
+    try {
+      // If not initialized yet, store this touch to be replayed after init completes
+      if (!isInitialized) {
+        pendingTouch.current = { id: touchId, x, y };
+        return;
+      }
 
-    // Prevent duplicate voice creation for same touch
-    if (activeTouches.current.has(touchId)) {
-      return;
-    }
+      // Prevent duplicate voice creation for same touch
+      if (activeTouches.current.has(touchId)) {
+        return;
+      }
 
-    // Ensure audio is unlocked on first gesture after page visibility change
-    if (audioUnlockNeeded.current) {
-      await ensureAudioUnlocked();
-    }
+      // Ensure audio is unlocked on first gesture after page visibility change
+      if (audioUnlockNeeded.current) {
+        await ensureAudioUnlocked();
+      }
 
-    activeTouches.current.add(touchId);
-    await audioEngine.createVoice(touchId, x, y);
-    setActiveVoices(audioEngine.getActiveVoiceCount());
+      activeTouches.current.add(touchId);
+      await audioEngine.createVoice(touchId, x, y);
+      setActiveVoices(audioEngine.getActiveVoiceCount());
+    } catch (e) {
+      console.warn('[handleTouchStart] error:', e);
+    }
   }, [isInitialized, ensureAudioUnlocked]);
 
   const handleTouchMove = useCallback((touchId: number, x: number, y: number) => {
