@@ -58,9 +58,18 @@ export class AudioEngine {
   private isInitialized = false;
   private activePointers: Set<number> = new Set();
 
-  // Initialize audio context (must be called after user interaction)
-  async initialize(): Promise<void> {
+  // Initialize audio context — MUST be called synchronously from a user gesture.
+  // iOS Safari requires that AudioContext creation, silent unlock, and resume()
+  // happen within the same synchronous call stack as the user gesture handler.
+  // Any await before these calls consumes the gesture token and silently fails.
+  initialize(): void {
     if (this.isInitialized) {
+      // Even if already initialized, try to resume (in case context was suspended)
+      if (this.audioContext && this.audioContext.state === 'suspended') {
+        this.audioContext.resume().catch((e) =>
+          console.warn('[AudioEngine] resume on re-init failed:', String(e))
+        );
+      }
       return;
     }
 
@@ -70,21 +79,24 @@ export class AudioEngine {
       return;
     }
 
+    // --- SYNCHRONOUS iOS UNLOCK SEQUENCE ---
+    // Everything between here and the end of this method must be synchronous.
     this.audioContext = new AudioContextClass();
-    
+
     VoiceManager.setAudioContext(this.audioContext);
-    
+
     this.masterGain = this.audioContext.createGain();
     this.masterGain.gain.setValueAtTime(0.5, this.audioContext.currentTime);
-    
+
     this.analyser = this.audioContext.createAnalyser();
     this.analyser.fftSize = 2048;
     this.analyser.smoothingTimeConstant = 0.8;
-    
+
     this.masterGain.connect(this.analyser);
     this.analyser.connect(this.audioContext.destination);
 
-    // iOS silent unlock — play empty buffer to fully unlock audio pipeline
+    // iOS silent unlock — play empty buffer to fully unlock audio pipeline.
+    // This MUST happen synchronously, inside the same gesture handler.
     try {
       const buffer = this.audioContext.createBuffer(1, 1, 22050);
       const source = this.audioContext.createBufferSource();
@@ -94,18 +106,16 @@ export class AudioEngine {
     } catch (e) {
       console.warn('[AudioEngine] silent unlock failed:', String(e));
     }
-    
-    // CRITICAL: Mark initialized BEFORE attempting resume
-    // On iOS, await resume() can hang indefinitely — we must not block on it
-    this.isInitialized = true;
 
+    // Fire resume() synchronously and don't await — iOS grants the gesture token
+    // to the synchronous call, but waiting on the returned promise loses it.
     if (this.audioContext.state === 'suspended') {
-      try {
-        await this.audioContext.resume();
-      } catch (e) {
-        console.warn('[AudioEngine] resume rejected:', String(e));
-      }
+      this.audioContext.resume().catch((e) =>
+        console.warn('[AudioEngine] resume rejected:', String(e))
+      );
     }
+
+    this.isInitialized = true;
   }
 
   // Get analyzer for visualization
@@ -178,13 +188,14 @@ export class AudioEngine {
       return null;
     }
 
-    // CRITICAL for iOS: await resume before creating oscillators
+    // iOS: Fire resume() non-blockingly. Awaiting here loses the gesture token
+    // and causes the promise to hang indefinitely on Safari iOS.
+    // The initialize() call from the same gesture already unlocked the context;
+    // this is just a safety net for edge cases (e.g. page came back from bg).
     if (this.audioContext.state === 'suspended') {
-      try {
-        await this.audioContext.resume();
-      } catch (e) {
-        console.warn('[createVoice] resume failed:', String(e));
-      }
+      this.audioContext.resume().catch((e) =>
+        console.warn('[createVoice] resume failed:', String(e))
+      );
     }
 
     // Check if this pointer is already tracked
