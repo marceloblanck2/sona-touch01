@@ -42,12 +42,14 @@ export function useAudioEngine() {
     }
   }, []);
 
-  // Initialize audio engine — non-blocking resume for iOS compatibility
-  const initialize = useCallback(async () => {
+  // Initialize audio engine — synchronous for iOS compatibility.
+  // The AudioEngine.initialize() must complete inside the user gesture stack,
+  // so this wrapper does not await anything that could lose the gesture token.
+  const initialize = useCallback(() => {
     try {
       if (!isInitialized) {
-        // initialize() now handles resume non-blockingly inside
-        await audioEngine.initialize();
+        // initialize() is synchronous now — critical for iOS Safari
+        audioEngine.initialize();
         audioUnlockNeeded.current = false;
 
         setIsInitialized(true);
@@ -58,13 +60,15 @@ export function useAudioEngine() {
         audioEngine.setSynestheticParams(params);
         applySynthColor(color);
 
-        // Replay the pending touch that triggered initialization
+        // Replay the pending touch that triggered initialization.
+        // createVoice is async but we don't await — fire and forget is fine here.
         if (pendingTouch.current) {
           const { id, x, y } = pendingTouch.current;
           pendingTouch.current = null;
           activeTouches.current.add(id);
-          await audioEngine.createVoice(id, x, y);
-          setActiveVoices(audioEngine.getActiveVoiceCount());
+          audioEngine.createVoice(id, x, y).then(() => {
+            setActiveVoices(audioEngine.getActiveVoiceCount());
+          }).catch((e) => console.warn('[initialize] replay touch failed:', e));
         }
       } else {
         ensureAudioUnlocked();
