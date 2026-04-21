@@ -63,15 +63,20 @@ export class AudioEngine {
   // happen within the same synchronous call stack as the user gesture handler.
   // Any await before these calls consumes the gesture token and silently fails.
   initialize(): void {
-    if (this.isInitialized) {
-      // Even if already initialized, try to resume (in case context was suspended)
-      if (this.audioContext && this.audioContext.state === 'suspended') {
-        this.audioContext.resume().catch((e) =>
-          console.warn('[AudioEngine] resume on re-init failed:', String(e))
-        );
-      }
-      return;
-    }
+   if (this.isInitialized) {
+  // Even if already initialized, try to resume if Safari/iOS put the context
+  // into suspended or interrupted.
+  if (
+    this.audioContext &&
+    (this.audioContext.state === 'suspended' ||
+      this.audioContext.state === 'interrupted')
+  ) {
+    this.audioContext.resume().catch((e) =>
+      console.warn('[AudioEngine] resume on re-init failed:', String(e))
+    );
+  }
+  return;
+}
 
     const AudioContextClass = (window.AudioContext || (window as any).webkitAudioContext);
     if (!AudioContextClass) {
@@ -109,12 +114,14 @@ export class AudioEngine {
 
     // Fire resume() synchronously and don't await — iOS grants the gesture token
     // to the synchronous call, but waiting on the returned promise loses it.
-    if (this.audioContext.state === 'suspended') {
-      this.audioContext.resume().catch((e) =>
-        console.warn('[AudioEngine] resume rejected:', String(e))
-      );
-    }
-
+    if (
+  this.audioContext.state === 'suspended' ||
+  this.audioContext.state === 'interrupted'
+) {
+  this.audioContext.resume().catch((e) =>
+    console.warn('[AudioEngine] resume rejected:', String(e))
+  );
+}
     this.isInitialized = true;
   }
 
@@ -192,11 +199,14 @@ export class AudioEngine {
     // and causes the promise to hang indefinitely on Safari iOS.
     // The initialize() call from the same gesture already unlocked the context;
     // this is just a safety net for edge cases (e.g. page came back from bg).
-    if (this.audioContext.state === 'suspended') {
-      this.audioContext.resume().catch((e) =>
-        console.warn('[createVoice] resume failed:', String(e))
-      );
-    }
+    if (
+  this.audioContext.state === 'suspended' ||
+  this.audioContext.state === 'interrupted'
+) {
+  this.audioContext.resume().catch((e) =>
+    console.warn('[createVoice] resume failed:', String(e))
+  );
+}
 
     // Check if this pointer is already tracked
     if (this.activePointers.has(touchId)) {
@@ -358,12 +368,23 @@ export class AudioEngine {
     voiceGain.gain.setValueAtTime(0, this.audioContext.currentTime);
     
     // Stereo panner
-    const panner = this.audioContext.createStereoPanner();
-    panner.pan.setValueAtTime((x - 0.5) * 2, this.audioContext.currentTime);
-    
-    filter.connect(voiceGain);
-    voiceGain.connect(panner);
-    panner.connect(this.masterGain);
+const panner =
+  typeof this.audioContext.createStereoPanner === 'function'
+    ? this.audioContext.createStereoPanner()
+    : null;
+
+if (panner) {
+  panner.pan.setValueAtTime((x - 0.5) * 2, this.audioContext.currentTime);
+}
+
+filter.connect(voiceGain);
+
+if (panner) {
+  voiceGain.connect(panner);
+  panner.connect(this.masterGain);
+} else {
+  voiceGain.connect(this.masterGain);
+}
     
     // Start oscillators, noise, and LFOs
     oscillators.forEach(osc => osc.start());
@@ -854,23 +875,37 @@ export class AudioEngine {
 
   // Resume audio context (legacy)
   resume(): void {
-    this.audioContext?.resume();
+  if (
+    this.audioContext &&
+    (this.audioContext.state === 'suspended' ||
+      this.audioContext.state === 'interrupted')
+  ) {
+    this.audioContext.resume().catch((e) =>
+      console.warn('[AudioEngine] resume failed:', String(e))
+    );
   }
+}
 
   // Ensure audio context is resumed — non-blocking for iOS compatibility
   ensureResumed(): Promise<void> {
-    if (this.audioContext && this.audioContext.state === 'suspended') {
-      this.audioContext.resume()
-        .catch((e) => console.warn('[AudioEngine] ensureResumed failed:', String(e)));
-    }
-    return Promise.resolve();
+  if (
+    this.audioContext &&
+    (this.audioContext.state === 'suspended' ||
+      this.audioContext.state === 'interrupted')
+  ) {
+    this.audioContext.resume()
+      .catch((e) => console.warn('[AudioEngine] ensureResumed failed:', String(e)));
   }
+  return Promise.resolve();
+}
 
   // Check if audio context is suspended
   isSuspended(): boolean {
-    return this.audioContext ? this.audioContext.state === 'suspended' : false;
-  }
-
+  return this.audioContext
+    ? this.audioContext.state === 'suspended' ||
+        this.audioContext.state === 'interrupted'
+    : false;
+}
   // Cleanup
   dispose(): void {
     this.stopAllSound();
