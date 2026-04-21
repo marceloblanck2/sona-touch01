@@ -90,59 +90,61 @@ export const FullscreenControls: React.FC<FullscreenControlsProps> = ({
 
     return (
       <div
-        className={`flex items-center gap-2 ${isLandscape ? '' : 'w-full'}`}
+        className="flex items-center gap-2 w-full"
         onPointerDown={stopAll}
       >
         <span className="shrink-0" style={{ color: accentColor }}>
           {icon}
         </span>
 
-        <span className="w-10 text-[10px] uppercase tracking-wide text-muted-foreground">
+        <span className="w-10 text-[10px] uppercase tracking-wide text-muted-foreground shrink-0">
           {label}
         </span>
 
-        <button
-          type="button"
-          onPointerDown={(e) => {
-            stopAll(e);
-            if (canDecrease) onChange(steps[index - 1]);
-          }}
-          className="h-8 w-8 rounded-md border text-sm shrink-0"
-          style={{
-            color: canDecrease ? accentColor : 'hsl(220 10% 40%)',
-            borderColor: canDecrease
-              ? `hsl(${color.h} ${color.s}% ${color.l}% / 0.35)`
-              : 'hsl(220 15% 18%)',
-            background: 'hsl(220 15% 12%)',
-          }}
-        >
-          −
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onPointerDown={(e) => {
+              stopAll(e);
+              if (canDecrease) onChange(steps[index - 1]);
+            }}
+            className="h-8 w-8 rounded-md border text-sm shrink-0"
+            style={{
+              color: canDecrease ? accentColor : 'hsl(220 10% 40%)',
+              borderColor: canDecrease
+                ? `hsl(${color.h} ${color.s}% ${color.l}% / 0.35)`
+                : 'hsl(220 15% 18%)',
+              background: 'hsl(220 15% 12%)',
+            }}
+          >
+            −
+          </button>
 
-        <div
-          className="flex-1 min-w-[52px] text-center text-[11px] font-mono"
-          style={{ color: accentColor }}
-        >
-          {formatValue(steps[index])}
+          <div
+            className="min-w-[58px] text-center text-[11px] font-mono shrink-0"
+            style={{ color: accentColor }}
+          >
+            {formatValue(steps[index])}
+          </div>
+
+          <button
+            type="button"
+            onPointerDown={(e) => {
+              stopAll(e);
+              if (canIncrease) onChange(steps[index + 1]);
+            }}
+            className="h-8 w-8 rounded-md border text-sm shrink-0"
+            style={{
+              color: canIncrease ? accentColor : 'hsl(220 10% 40%)',
+              borderColor: canIncrease
+                ? `hsl(${color.h} ${color.s}% ${color.l}% / 0.35)`
+                : 'hsl(220 15% 18%)',
+              background: 'hsl(220 15% 12%)',
+            }}
+          >
+            +
+          </button>
         </div>
-
-        <button
-          type="button"
-          onPointerDown={(e) => {
-            stopAll(e);
-            if (canIncrease) onChange(steps[index + 1]);
-          }}
-          className="h-8 w-8 rounded-md border text-sm shrink-0"
-          style={{
-            color: canIncrease ? accentColor : 'hsl(220 10% 40%)',
-            borderColor: canIncrease
-              ? `hsl(${color.h} ${color.s}% ${color.l}% / 0.35)`
-              : 'hsl(220 15% 18%)',
-            background: 'hsl(220 15% 12%)',
-          }}
-        >
-          +
-        </button>
       </div>
     );
   };
