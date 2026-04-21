@@ -402,7 +402,7 @@ export const XYPad: React.FC<XYPadProps> = ({
         />
       </div>
 
-      <div className="absolute bottom-3 right-3 pointer-events-none">
+      <div className="absolute top-3 right-3 pointer-events-none">
         <span
           className="font-mono text-xs uppercase tracking-wider opacity-40"
           style={{ color: `hsl(${bgHue} ${bgSat}% ${bgLight}%)` }}
