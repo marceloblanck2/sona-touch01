@@ -1,6 +1,6 @@
 // SØNA Touch 01 - XY Pad Component with Multitouch Support and Trail
 
-import React, { useRef, useCallback, useState } from 'react';
+import React, { useRef, useCallback, useState, useEffect } from 'react';
 import { GRID_3x3 } from '../../utils/constants';
 import { GridMode } from '../../utils/constants';
 import { HSLColor } from '../../utils/colorUtils';
@@ -67,6 +67,29 @@ export const XYPad: React.FC<XYPadProps> = ({
   });
   const lastPositionRef = useRef<{ x: number; y: number } | null>(null);
 
+  useEffect(() => {
+  const el = containerRef.current;
+  if (!el) return;
+
+  const unlock = () => {
+    if (audioEngine.isSuspended()) {
+      audioEngine.forceRecreateContext();
+      audioEngine.forceSilentUnlock();
+      audioEngine.resume();
+    } else {
+      audioEngine.initialize();
+      audioEngine.forceSilentUnlock();
+      audioEngine.resume();
+    }
+  };
+
+  el.addEventListener('touchstart', unlock, { passive: true });
+
+  return () => {
+    el.removeEventListener('touchstart', unlock);
+  };
+}, []);
+  
   // Update gesture color — uses audio-derived color when available (GSI mapping),
   // falls back to position-based color when audio engine hasn't produced a color yet
   const updateGestureColor = useCallback((x: number, y: number, pointerId?: number) => {
