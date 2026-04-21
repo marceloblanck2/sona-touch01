@@ -196,7 +196,7 @@ el.addEventListener('pointerup', unlock);
       next.set(id, { id, x, y });
       return next;
     });
-
+lastTrailPointRef.current.set(id, { x, y });
     updateGestureColor(x, y, id);
 
     // Record trail point with current live color
@@ -215,51 +215,50 @@ el.addEventListener('pointerup', unlock);
     }
   }, [getNormalizedCoords, onTouchStart, onInteractionStart, isValidInput, updateGestureColor]);
 
-  // Handle pointer move
-  const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    const id = e.pointerId;
+ // Handle pointer move
+const handlePointerMove = useCallback((e: React.PointerEvent) => {
+  const id = e.pointerId;
 
-    if (!activePointers.current.has(id)) return;
+  if (!activePointers.current.has(id)) return;
 
-    e.preventDefault();
+  e.preventDefault();
 
-    const { x, y } = getNormalizedCoords(e.clientX, e.clientY);
+  const { x, y } = getNormalizedCoords(e.clientX, e.clientY);
 
-    setTouchPoints(prev => {
-      const next = new Map(prev);
-      next.set(id, { id, x, y });
-      return next;
-    });
+  setTouchPoints(prev => {
+    const next = new Map(prev);
+    next.set(id, { id, x, y });
+    return next;
+  });
 
-    updateGestureColor(x, y, id);
+  updateGestureColor(x, y, id);
 
-   // Record trail points with interpolation for smoother continuous trace
-const prev = touchPoints.get(id);
+  // Record trail points with interpolation for smoother continuous trace
+  const prevTrail = lastTrailPointRef.current.get(id);
 
-if (prev && (window as any).__sonaTrailAdd) {
-  const dx = x - prev.x;
-  const dy = y - prev.y;
-  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (prevTrail && (window as any).__sonaTrailAdd) {
+    const dx = x - prevTrail.x;
+    const dy = y - prevTrail.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
 
-  // More distance = more intermediate points
-  const steps = Math.max(1, Math.ceil(dist * 60));
+    const steps = Math.max(1, Math.ceil(dist * 60));
+    const c = gestureColorRef.current;
 
-  const c = gestureColorRef.current;
-
-  for (let i = 1; i <= steps; i++) {
-    const t = i / steps;
-    const ix = prev.x + dx * t;
-    const iy = prev.y + dy * t;
-
-    (window as any).__sonaTrailAdd(ix, iy, c.hue, c.saturation, c.lightness);
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps;
+      const ix = prevTrail.x + dx * t;
+      const iy = prevTrail.y + dy * t;
+      (window as any).__sonaTrailAdd(ix, iy, c.hue, c.saturation, c.lightness);
+    }
+  } else if ((window as any).__sonaTrailAdd) {
+    const c = gestureColorRef.current;
+    (window as any).__sonaTrailAdd(x, y, c.hue, c.saturation, c.lightness);
   }
-} else if ((window as any).__sonaTrailAdd) {
-  const c = gestureColorRef.current;
-  (window as any).__sonaTrailAdd(x, y, c.hue, c.saturation, c.lightness);
-}
 
-    onTouchMove(id, x, y);
-  }, [getNormalizedCoords, onTouchMove, updateGestureColor]);
+  lastTrailPointRef.current.set(id, { x, y });
+
+  onTouchMove(id, x, y);
+}, [getNormalizedCoords, onTouchMove, updateGestureColor]);
 
   // Handle pointer up/end
   const handlePointerUp = useCallback((e: React.PointerEvent) => {
@@ -270,6 +269,7 @@ if (prev && (window as any).__sonaTrailAdd) {
     e.preventDefault();
 
     activePointers.current.delete(id);
+    lastTrailPointRef.current.delete(id);
 
     setTouchPoints(prev => {
       const next = new Map(prev);
