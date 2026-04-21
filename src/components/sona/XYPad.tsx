@@ -5,6 +5,7 @@ import { GRID_3x3 } from '../../utils/constants';
 import { GridMode } from '../../utils/constants';
 import { HSLColor } from '../../utils/colorUtils';
 import { TrailCanvas } from './TrailCanvas';
+import { audioEngine } from '../../audio/AudioEngine';
 
 interface TouchPoint {
   id: number;
@@ -137,6 +138,9 @@ export const XYPad: React.FC<XYPadProps> = ({
       return;
     }
 
+    audioEngine.initialize();
+    audioEngine.resume();
+    
     e.preventDefault();
     e.stopPropagation();
 
