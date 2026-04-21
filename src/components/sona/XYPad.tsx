@@ -160,13 +160,12 @@ export const XYPad: React.FC<XYPadProps> = ({
     });
 
     updateGestureColor(x, y, id);
-    trailColorsRef.current.set(id, { ...gestureColorRef.current });
 
-    // Record trail point with this pointer's locked color
-    if ((window as any).__sonaTrailAdd) {
-      const tc = trailColorsRef.current.get(id)!;
-      (window as any).__sonaTrailAdd(x, y, tc.hue, tc.saturation, tc.lightness);
-    }
+// Record trail point with current live color
+if ((window as any).__sonaTrailAdd) {
+  const c = gestureColorRef.current;
+  (window as any).__sonaTrailAdd(x, y, c.hue, c.saturation, c.lightness);
+}
 
     setIsActive(true);
     onTouchStart(id, x, y);
@@ -198,11 +197,12 @@ export const XYPad: React.FC<XYPadProps> = ({
     // Update gesture color from audio state (GSI mapping)
     updateGestureColor(x, y, id);
     
-    // Record trail point with this pointer's locked color
-    const tc = trailColorsRef.current.get(id);
-    if ((window as any).__sonaTrailAdd && tc) {
-      (window as any).__sonaTrailAdd(x, y, tc.hue, tc.saturation, tc.lightness);
-    }
+
+   // Record trail point with current live color
+if ((window as any).__sonaTrailAdd) {
+  const c = gestureColorRef.current;
+  (window as any).__sonaTrailAdd(x, y, c.hue, c.saturation, c.lightness);
+}
     
     onTouchMove(id, x, y);
   }, [getNormalizedCoords, onTouchMove]);
@@ -218,7 +218,7 @@ export const XYPad: React.FC<XYPadProps> = ({
     
     // Remove from local tracking
     activePointers.current.delete(id);
-    trailColorsRef.current.delete(id);
+   
     
     setTouchPoints(prev => {
       const next = new Map(prev);
