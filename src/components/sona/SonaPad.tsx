@@ -1,5 +1,3 @@
-// SØM Touch - Main Application Component
-
 import React, { useCallback, useState, useEffect } from 'react';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { Header } from './Header';
@@ -15,11 +13,10 @@ import { DebugOverlay } from '../DebugOverlay';
 
 export const SonaPad: React.FC = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [trailDuration, setTrailDuration] = useState(3); // default 3 seconds
-  const [glowSize, setGlowSize] = useState(1.0); // 1.0 = 100% default size
+  const [trailDuration, setTrailDuration] = useState(3);
+  const [glowSize, setGlowSize] = useState(0.75);
   const [isLandscape, setIsLandscape] = useState(false);
 
-  // Detect orientation for responsive fullscreen layout
   useEffect(() => {
     const check = () => setIsLandscape(window.innerWidth > window.innerHeight);
     check();
@@ -57,7 +54,6 @@ export const SonaPad: React.FC = () => {
     });
   }, [applySettings]);
 
-  // Fullscreen Mode — responsive layout
   if (isFullscreen) {
     const fullscreenBg = `
       radial-gradient(ellipse at 50% 50%, hsl(${color.h} ${color.s}% ${color.l}% / 0.08) 0%, transparent 60%),
@@ -66,7 +62,7 @@ export const SonaPad: React.FC = () => {
 
     return (
       <div
-        className={`fixed inset-0 z-50 flex overflow-hidden ${isLandscape ? 'flex-row' : 'flex-col'}`}
+        className={`fixed inset-0 z-50 overflow-hidden ${isLandscape ? 'flex flex-row' : 'flex flex-col'}`}
         style={{
           background: fullscreenBg,
           paddingTop: 'env(safe-area-inset-top)',
@@ -77,9 +73,8 @@ export const SonaPad: React.FC = () => {
       >
         <DebugOverlay />
 
-        {/* Landscape: controls on the LEFT */}
         {isLandscape && (
-          <div className="relative z-20 shrink-0 pointer-events-auto">
+          <div className="relative z-20 shrink-0 w-56 max-w-[34vw] pointer-events-auto">
             <FullscreenControls
               color={color}
               gridMode={gridMode}
@@ -100,7 +95,6 @@ export const SonaPad: React.FC = () => {
           </div>
         )}
 
-        {/* XY Pad — takes remaining space */}
         <div className="relative z-0 flex-1 min-h-0 min-w-0 p-1">
           <div className="h-full w-full">
             <XYPad
@@ -118,9 +112,8 @@ export const SonaPad: React.FC = () => {
           </div>
         </div>
 
-        {/* Portrait: controls on the BOTTOM */}
         {!isLandscape && (
-          <div className="relative z-20 shrink-0 pointer-events-auto">
+          <div className="relative z-20 shrink-0 pointer-events-auto h-[26svh] min-h-[210px] max-h-[290px]">
             <FullscreenControls
               color={color}
               gridMode={gridMode}
@@ -157,6 +150,7 @@ export const SonaPad: React.FC = () => {
     >
       <div className="max-w-7xl mx-auto">
         <DebugOverlay />
+
         <Header
           activeVoices={activeVoices}
           color={color}
@@ -165,16 +159,13 @@ export const SonaPad: React.FC = () => {
         />
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-6">
-          {/* Main XY Pad Area */}
           <div className="lg:col-span-8 space-y-4">
-            {/* XY Pad with Fullscreen Toggle */}
             <div
               className="sona-panel p-4 relative"
               style={{
                 borderColor: `hsl(${color.h} ${color.s}% ${color.l}% / 0.15)`,
               }}
             >
-              {/* Fullscreen Toggle Button */}
               <button
                 type="button"
                 onPointerDown={(e) => e.stopPropagation()}
@@ -203,11 +194,11 @@ export const SonaPad: React.FC = () => {
               />
             </div>
 
-            {/* Waveform and Voice Count */}
             <div className="flex items-center gap-4">
               <div className="flex-1">
                 <Waveform data={waveformData} color={color} height={80} />
               </div>
+
               <div
                 className="sona-panel px-4 py-3"
                 style={{
@@ -223,7 +214,6 @@ export const SonaPad: React.FC = () => {
             </div>
           </div>
 
-          {/* Control Panel */}
           <div className="lg:col-span-4 space-y-6">
             <div
               className="sona-panel p-5"
@@ -269,7 +259,6 @@ export const SonaPad: React.FC = () => {
           </div>
         </div>
 
-        {/* Footer */}
         <footer className="mt-8 pt-4 border-t border-border/50">
           <div className="flex flex-wrap items-center justify-end gap-4 text-xs text-muted-foreground">
             <p className="opacity-60">
