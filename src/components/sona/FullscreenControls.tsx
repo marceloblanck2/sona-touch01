@@ -182,11 +182,10 @@ export const FullscreenControls: React.FC<FullscreenControlsProps> = ({
 
   return (
     <div
-      className={`relative h-full flex ${
-        isLandscape ? 'flex-col p-2 pt-10' : 'flex-col p-2 pt-10'
-      } gap-2 bg-background/40 backdrop-blur-sm`}
+      className="relative h-full w-full overflow-y-auto overflow-x-hidden flex flex-col gap-2 bg-background/40 backdrop-blur-sm p-2 pt-10"
       style={{
         borderColor: `hsl(${color.h} ${color.s}% ${color.l}% / 0.15)`,
+        WebkitOverflowScrolling: 'touch',
       }}
       onPointerDown={(e) => e.stopPropagation()}
     >
@@ -209,7 +208,7 @@ export const FullscreenControls: React.FC<FullscreenControlsProps> = ({
         <span>Exit</span>
       </button>
 
-      <div className="flex gap-2 pr-16" onPointerDown={stopAll}>
+      <div className={`flex gap-2 ${isLandscape ? 'pr-0' : 'pr-16'}`} onPointerDown={stopAll}>
         <button
           type="button"
           onPointerDown={(e) => {
@@ -255,12 +254,12 @@ export const FullscreenControls: React.FC<FullscreenControlsProps> = ({
         </button>
       </div>
 
-      <div className={`flex ${isLandscape ? 'flex-col' : 'flex-col'} gap-2 w-full`}>
+      <div className="flex flex-col gap-2 w-full">
         {renderMappingSelect('X', mappingX, onMappingXChange)}
         {renderMappingSelect('Y', mappingY, onMappingYChange)}
       </div>
 
-      <div className={`flex ${isLandscape ? 'flex-col' : 'flex-col'} gap-2 w-full`}>
+      <div className="flex flex-col gap-2 w-full pb-6">
         {renderStepControl({
           icon: <Volume2 size={15} />,
           label: 'Vol',
