@@ -65,8 +65,10 @@ export const SonaPad: React.FC = () => {
         className={`fixed inset-0 z-50 overflow-hidden ${isLandscape ? 'flex flex-row' : 'flex flex-col'}`}
         style={{
           background: fullscreenBg,
+          height: '100svh',
+          maxHeight: '100svh',
           paddingTop: 'env(safe-area-inset-top)',
-          paddingBottom: 'env(safe-area-inset-bottom)',
+          paddingBottom: 'calc(env(safe-area-inset-bottom) + 58px)',
           paddingLeft: 'env(safe-area-inset-left)',
           paddingRight: 'env(safe-area-inset-right)',
         }}
@@ -74,7 +76,7 @@ export const SonaPad: React.FC = () => {
         <DebugOverlay />
 
         {isLandscape && (
-          <div className="relative z-20 shrink-0 w-56 max-w-[34vw] pointer-events-auto">
+          <div className="relative z-20 shrink-0 w-52 max-w-[32vw] min-w-[188px] overflow-hidden pointer-events-auto">
             <FullscreenControls
               color={color}
               gridMode={gridMode}
@@ -96,7 +98,7 @@ export const SonaPad: React.FC = () => {
         )}
 
         <div className="relative z-0 flex-1 min-h-0 min-w-0 p-1">
-          <div className="h-full w-full">
+          <div className="h-full w-full min-h-0">
             <XYPad
               gridMode={gridMode}
               color={color}
@@ -113,7 +115,7 @@ export const SonaPad: React.FC = () => {
         </div>
 
         {!isLandscape && (
-          <div className="relative z-20 shrink-0 pointer-events-auto h-[26svh] min-h-[210px] max-h-[290px]">
+          <div className="relative z-20 shrink-0 pointer-events-auto h-[24svh] min-h-[190px] max-h-[250px] overflow-hidden">
             <FullscreenControls
               color={color}
               gridMode={gridMode}
