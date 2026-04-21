@@ -67,7 +67,7 @@ export const XYPad: React.FC<XYPadProps> = ({
   });
   const lastPositionRef = useRef<{ x: number; y: number } | null>(null);
 
-  useEffect(() => {
+ useEffect(() => {
   const el = containerRef.current;
   if (!el) return;
 
@@ -83,10 +83,14 @@ export const XYPad: React.FC<XYPadProps> = ({
     }
   };
 
-  el.addEventListener('touchstart', unlock, { passive: true });
+el.addEventListener('touchstart', unlock, { passive: true });
+el.addEventListener('touchend', unlock, { passive: true });
+el.addEventListener('pointerup', unlock);
 
   return () => {
-    el.removeEventListener('touchstart', unlock);
+   el.removeEventListener('touchstart', unlock);
+  el.removeEventListener('touchend', unlock);
+  el.removeEventListener('pointerup', unlock);
   };
 }, []);
   
