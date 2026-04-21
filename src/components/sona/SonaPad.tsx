@@ -8,8 +8,34 @@ import { FullscreenControls } from './FullscreenControls';
 import { PresetPanel } from './PresetPanel';
 import { VoiceIndicator } from './VoiceIndicator';
 import { Preset } from '../../presets/PresetManager';
-import { Maximize2 } from 'lucide-react';
+import { Maximize2, Minimize2 } from 'lucide-react';
 import { DebugOverlay } from '../DebugOverlay';
+
+const FULLSCREEN_SIZE_STEPS = [
+  0.3, 0.45, 0.6, 0.75, 0.9,
+  1, 1.15, 1.3, 1.45, 1.6,
+  1.8, 2, 2.3, 2.6, 3,
+];
+
+const getClosestStepIndex = (value: number, steps: number[]) => {
+  let closestIndex = 0;
+  let minDiff = Infinity;
+
+  steps.forEach((step, index) => {
+    const diff = Math.abs(step - value);
+    if (diff < minDiff) {
+      minDiff = diff;
+      closestIndex = index;
+    }
+  });
+
+  return closestIndex;
+};
+
+const glowToVolume = (size: number) => {
+  const normalized = (size - 0.3) / (3 - 0.3);
+  return Math.max(0.15, Math.min(1, 0.2 + normalized * 0.8));
+};
 
 export const SonaPad: React.FC = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -54,6 +80,18 @@ export const SonaPad: React.FC = () => {
     });
   }, [applySettings]);
 
+  const handleFullscreenSizeChange = useCallback((direction: 'up' | 'down') => {
+    const index = getClosestStepIndex(glowSize, FULLSCREEN_SIZE_STEPS);
+    const nextIndex =
+      direction === 'up'
+        ? Math.min(FULLSCREEN_SIZE_STEPS.length - 1, index + 1)
+        : Math.max(0, index - 1);
+
+    const nextGlow = FULLSCREEN_SIZE_STEPS[nextIndex];
+    setGlowSize(nextGlow);
+    updateVolume(glowToVolume(nextGlow));
+  }, [glowSize, updateVolume]);
+
   if (isFullscreen) {
     const fullscreenBg = `
       radial-gradient(ellipse at 50% 50%, hsl(${color.h} ${color.s}% ${color.l}% / 0.08) 0%, transparent 60%),
@@ -62,7 +100,7 @@ export const SonaPad: React.FC = () => {
 
     return (
       <div
-        className={`fixed inset-0 z-50 overflow-hidden ${isLandscape ? 'flex flex-row' : 'flex flex-col'}`}
+        className="fixed inset-0 z-50 overflow-hidden"
         style={{
           background: fullscreenBg,
           height: '100svh',
@@ -75,66 +113,81 @@ export const SonaPad: React.FC = () => {
       >
         <DebugOverlay />
 
-        {isLandscape && (
-          <div className="relative z-20 shrink-0 w-52 max-w-[32vw] min-w-[188px] overflow-hidden pointer-events-auto">
-            <FullscreenControls
-              color={color}
-              gridMode={gridMode}
-              volume={masterVolume}
-              trailDuration={trailDuration}
-              glowSize={glowSize}
-              mappingX={mappings.x}
-              mappingY={mappings.y}
-              onModeChange={updateGridMode}
-              onVolumeChange={updateVolume}
-              onTrailChange={setTrailDuration}
-              onSizeChange={setGlowSize}
-              onMappingXChange={(v) => updateMapping('x', v)}
-              onMappingYChange={(v) => updateMapping('y', v)}
-              onExit={() => setIsFullscreen(false)}
-              isLandscape={true}
-            />
-          </div>
-        )}
+        <div className="relative h-full w-full p-1">
+          <XYPad
+            gridMode={gridMode}
+            color={color}
+            trailDuration={trailDuration}
+            glowSize={glowSize}
+            getVoiceColor={getVoiceColor}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onInteractionStart={initialize}
+            isFullscreen={true}
+          />
 
-        <div className="relative z-0 flex-1 min-h-0 min-w-0 p-1">
-          <div className="h-full w-full min-h-0">
-            <XYPad
-              gridMode={gridMode}
-              color={color}
-              trailDuration={trailDuration}
-              glowSize={glowSize}
-              getVoiceColor={getVoiceColor}
-              onTouchStart={handleTouchStart}
-              onTouchMove={handleTouchMove}
-              onTouchEnd={handleTouchEnd}
-              onInteractionStart={initialize}
-              isFullscreen={true}
-            />
+          <div
+            className={`absolute z-30 flex items-center gap-2 ${
+              isLandscape ? 'top-3 left-3' : 'top-3 right-3'
+            }`}
+          >
+            <button
+              type="button"
+              onPointerDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleFullscreenSizeChange('down');
+              }}
+              className="h-10 w-10 rounded-md border text-lg"
+              style={{
+                color: `hsl(${color.h} ${color.s}% ${color.l}%)`,
+                borderColor: `hsl(${color.h} ${color.s}% ${color.l}% / 0.25)`,
+                background: 'hsl(220 15% 12% / 0.9)',
+              }}
+              title="Diminuir tamanho e volume"
+            >
+              −
+            </button>
+
+            <button
+              type="button"
+              onPointerDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleFullscreenSizeChange('up');
+              }}
+              className="h-10 w-10 rounded-md border text-lg"
+              style={{
+                color: `hsl(${color.h} ${color.s}% ${color.l}%)`,
+                borderColor: `hsl(${color.h} ${color.s}% ${color.l}% / 0.25)`,
+                background: 'hsl(220 15% 12% / 0.9)',
+              }}
+              title="Aumentar tamanho e volume"
+            >
+              +
+            </button>
+
+            <button
+              type="button"
+              onPointerDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsFullscreen(false);
+              }}
+              className="flex items-center gap-1 px-3 py-2 rounded-md border text-[11px]"
+              style={{
+                color: `hsl(${color.h} ${color.s}% ${color.l}%)`,
+                borderColor: `hsl(${color.h} ${color.s}% ${color.l}% / 0.25)`,
+                background: 'hsl(220 15% 12% / 0.9)',
+              }}
+              title="Sair do fullscreen"
+            >
+              <Minimize2 size={14} />
+              <span>Exit</span>
+            </button>
           </div>
         </div>
-
-        {!isLandscape && (
-          <div className="relative z-20 shrink-0 pointer-events-auto h-[24svh] min-h-[190px] max-h-[250px] overflow-hidden">
-            <FullscreenControls
-              color={color}
-              gridMode={gridMode}
-              volume={masterVolume}
-              trailDuration={trailDuration}
-              glowSize={glowSize}
-              mappingX={mappings.x}
-              mappingY={mappings.y}
-              onModeChange={updateGridMode}
-              onVolumeChange={updateVolume}
-              onTrailChange={setTrailDuration}
-              onSizeChange={setGlowSize}
-              onMappingXChange={(v) => updateMapping('x', v)}
-              onMappingYChange={(v) => updateMapping('y', v)}
-              onExit={() => setIsFullscreen(false)}
-              isLandscape={false}
-            />
-          </div>
-        )}
       </div>
     );
   }
