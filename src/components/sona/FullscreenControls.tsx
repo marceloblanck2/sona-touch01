@@ -23,7 +23,12 @@ interface FullscreenControlsProps {
 
 const VOLUME_STEPS = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1];
 const TRAIL_STEPS = [0, 0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 7];
-const SIZE_STEPS = [0.5, 0.65, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.8, 2.2, 2.6];
+const SIZE_STEPS = [
+  0.15, 0.3, 0.45, 0.6, 0.75,
+  1, 1.15, 1.3, 1.45, 1.6,
+  1.75, 1.9, 2.05, 2.2, 2.35,
+  2.5, 2.65, 2.8, 3,
+];
 
 const getClosestStepIndex = (value: number, steps: number[]) => {
   let closestIndex = 0;
@@ -85,7 +90,7 @@ export const FullscreenControls: React.FC<FullscreenControlsProps> = ({
 
     return (
       <div
-        className={`flex items-center gap-2 ${isLandscape ? '' : 'flex-1 min-w-[160px]'}`}
+        className={`flex items-center gap-2 ${isLandscape ? '' : 'w-full'}`}
         onPointerDown={stopAll}
       >
         <span className="shrink-0" style={{ color: accentColor }}>
@@ -102,7 +107,7 @@ export const FullscreenControls: React.FC<FullscreenControlsProps> = ({
             stopAll(e);
             if (canDecrease) onChange(steps[index - 1]);
           }}
-          className="h-9 w-9 rounded-md border text-sm"
+          className="h-8 w-8 rounded-md border text-sm shrink-0"
           style={{
             color: canDecrease ? accentColor : 'hsl(220 10% 40%)',
             borderColor: canDecrease
@@ -115,7 +120,7 @@ export const FullscreenControls: React.FC<FullscreenControlsProps> = ({
         </button>
 
         <div
-          className="min-w-[56px] text-center text-[11px] font-mono"
+          className="flex-1 min-w-[52px] text-center text-[11px] font-mono"
           style={{ color: accentColor }}
         >
           {formatValue(steps[index])}
@@ -127,7 +132,7 @@ export const FullscreenControls: React.FC<FullscreenControlsProps> = ({
             stopAll(e);
             if (canIncrease) onChange(steps[index + 1]);
           }}
-          className="h-9 w-9 rounded-md border text-sm"
+          className="h-8 w-8 rounded-md border text-sm shrink-0"
           style={{
             color: canIncrease ? accentColor : 'hsl(220 10% 40%)',
             borderColor: canIncrease
@@ -147,9 +152,9 @@ export const FullscreenControls: React.FC<FullscreenControlsProps> = ({
     value: MappingOption,
     onChange: (v: MappingOption) => void
   ) => (
-    <div className="flex items-center gap-2" onPointerDown={stopAll}>
+    <div className="flex items-center gap-2 w-full" onPointerDown={stopAll}>
       <span
-        className="w-7 font-mono text-[11px] font-medium"
+        className="w-7 font-mono text-[11px] font-medium shrink-0"
         style={{ color: accentColor }}
       >
         {axis}→
@@ -159,7 +164,7 @@ export const FullscreenControls: React.FC<FullscreenControlsProps> = ({
         value={value}
         onChange={(e) => onChange(e.target.value as MappingOption)}
         onPointerDown={(e) => e.stopPropagation()}
-        className="h-9 min-w-[132px] rounded-md border px-2 text-[12px] bg-transparent"
+        className="h-8 min-w-0 flex-1 rounded-md border px-2 text-[12px] bg-transparent"
         style={{
           color: accentColor,
           borderColor: `hsl(${color.h} ${color.s}% ${color.l}% / 0.25)`,
@@ -177,11 +182,9 @@ export const FullscreenControls: React.FC<FullscreenControlsProps> = ({
 
   return (
     <div
-      className={`relative flex ${
-        isLandscape
-          ? 'flex-col h-full w-64 p-3 pt-14'
-          : 'flex-row flex-wrap items-center w-full p-3 pt-14'
-      } gap-3 bg-background/40 backdrop-blur-sm`}
+      className={`relative h-full flex ${
+        isLandscape ? 'flex-col p-2 pt-10' : 'flex-col p-2 pt-10'
+      } gap-2 bg-background/40 backdrop-blur-sm`}
       style={{
         borderColor: `hsl(${color.h} ${color.s}% ${color.l}% / 0.15)`,
       }}
@@ -193,8 +196,8 @@ export const FullscreenControls: React.FC<FullscreenControlsProps> = ({
           stopAll(e);
           onExit();
         }}
-        className={`absolute top-3 z-30 flex items-center gap-1.5 px-3 py-2 rounded-md border text-[11px] ${
-          isLandscape ? 'left-3' : 'right-3'
+        className={`absolute top-2 z-30 flex items-center gap-1 px-2.5 py-1.5 rounded-md border text-[10px] ${
+          isLandscape ? 'left-2' : 'right-2'
         }`}
         style={{
           color: accentColor,
@@ -202,18 +205,18 @@ export const FullscreenControls: React.FC<FullscreenControlsProps> = ({
           background: 'hsl(220 15% 12% / 0.9)',
         }}
       >
-        <Minimize2 size={14} />
+        <Minimize2 size={13} />
         <span>Exit</span>
       </button>
 
-      <div className="flex gap-2" onPointerDown={stopAll}>
+      <div className="flex gap-2 pr-16" onPointerDown={stopAll}>
         <button
           type="button"
           onPointerDown={(e) => {
             stopAll(e);
             onModeChange('grid');
           }}
-          className="h-10 px-4 rounded-md text-[11px] font-medium transition-all"
+          className="h-8 px-3 rounded-md text-[11px] font-medium transition-all"
           style={{
             background:
               gridMode === 'grid'
@@ -235,7 +238,7 @@ export const FullscreenControls: React.FC<FullscreenControlsProps> = ({
             stopAll(e);
             onModeChange('flow');
           }}
-          className="h-10 px-4 rounded-md text-[11px] font-medium transition-all"
+          className="h-8 px-3 rounded-md text-[11px] font-medium transition-all"
           style={{
             background:
               gridMode === 'flow'
@@ -252,14 +255,14 @@ export const FullscreenControls: React.FC<FullscreenControlsProps> = ({
         </button>
       </div>
 
-      <div className={`flex ${isLandscape ? 'flex-col' : 'flex-row flex-wrap'} gap-2`}>
+      <div className={`flex ${isLandscape ? 'flex-col' : 'flex-col'} gap-2 w-full`}>
         {renderMappingSelect('X', mappingX, onMappingXChange)}
         {renderMappingSelect('Y', mappingY, onMappingYChange)}
       </div>
 
-      <div className={`flex ${isLandscape ? 'flex-col flex-1' : 'flex-row flex-1 flex-wrap'} gap-2`}>
+      <div className={`flex ${isLandscape ? 'flex-col' : 'flex-col'} gap-2 w-full`}>
         {renderStepControl({
-          icon: <Volume2 size={16} />,
+          icon: <Volume2 size={15} />,
           label: 'Vol',
           value: volume,
           steps: VOLUME_STEPS,
@@ -268,7 +271,7 @@ export const FullscreenControls: React.FC<FullscreenControlsProps> = ({
         })}
 
         {renderStepControl({
-          icon: <Brush size={16} />,
+          icon: <Brush size={15} />,
           label: 'Trail',
           value: trailDuration,
           steps: TRAIL_STEPS,
@@ -277,7 +280,7 @@ export const FullscreenControls: React.FC<FullscreenControlsProps> = ({
         })}
 
         {renderStepControl({
-          icon: <Circle size={16} />,
+          icon: <Circle size={15} />,
           label: 'Size',
           value: glowSize,
           steps: SIZE_STEPS,
