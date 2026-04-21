@@ -66,6 +66,7 @@ export const XYPad: React.FC<XYPadProps> = ({
     lightness: 70,
   });
   const lastPositionRef = useRef<{ x: number; y: number } | null>(null);
+  const lastTrailPointRef = useRef<Map<number, { x: number; y: number }>>(new Map());
 
  useEffect(() => {
   const el = containerRef.current;
