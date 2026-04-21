@@ -413,24 +413,24 @@ export const XYPad: React.FC<XYPadProps> = ({
 
       {touchPoints.size === 0 && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="text-center select-none opacity-[0.08]">
+          <div className="text-center select-none opacity-[0.15]">
             <div
               className="text-4xl sm:text-5xl font-light tracking-[0.35em]"
-              style={{ opacity: 0.9, color: `hsl(${bgHue} ${bgSat}% ${bgLight}%)` }}
+              style={{ opacity: 0.95, color: `hsl(${bgHue} ${bgSat}% ${bgLight}%)` }}
             >
               SØM
             </div>
 
             <div
               className="mt-2 text-[10px] sm:text-[11px] tracking-[0.35em] uppercase"
-              style={{ opacity: 0.45, color: `hsl(${bgHue} ${bgSat}% ${bgLight}%)` }}
+              style={{ opacity: 0.7, color: `hsl(${bgHue} ${bgSat}% ${bgLight}%)` }}
             >
               imagem sonora
             </div>
 
             <div
               className="mt-2 text-[10px] sm:text-xs tracking-[0.28em] uppercase"
-              style={{ opacity: 0.6, color: `hsl(${bgHue} ${bgSat}% ${bgLight}%)` }}
+              style={{ opacity: 0.78, color: `hsl(${bgHue} ${bgSat}% ${bgLight}%)` }}
             >
               Marcelo Blanck
             </div>
