@@ -79,7 +79,6 @@ export const XYPad: React.FC<XYPadProps> = ({
       audioEngine.resume();
       audioReadyRef.current = true;
     } catch (err) {
-      // avoid crashing interaction flow on Safari/iPhone quirks
       console.warn('Audio unlock failed:', err);
     }
   }, []);
@@ -415,9 +414,20 @@ export const XYPad: React.FC<XYPadProps> = ({
 
       {touchPoints.size === 0 && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <p className="text-muted-foreground text-sm opacity-50 font-light tracking-wide">
-            Touch to play
-          </p>
+          <div className="text-center opacity-20 select-none">
+            <div
+              className="text-4xl sm:text-5xl font-light tracking-[0.35em]"
+              style={{ color: `hsl(${bgHue} ${bgSat}% ${bgLight}%)` }}
+            >
+              SØM
+            </div>
+            <div
+              className="mt-3 text-[11px] sm:text-xs tracking-[0.28em] uppercase"
+              style={{ color: `hsl(${bgHue} ${bgSat}% ${bgLight}%)` }}
+            >
+              Marcelo Blanck
+            </div>
+          </div>
         </div>
       )}
     </div>
