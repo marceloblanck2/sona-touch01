@@ -130,47 +130,7 @@ initialize(): void {
   this.isInitialized = true;
 }
 
-    // --- SYNCHRONOUS iOS UNLOCK SEQUENCE ---
-    // Everything between here and the end of this method must be synchronous.
-    this.audioContext = new AudioContextClass();
-
-    VoiceManager.setAudioContext(this.audioContext);
-
-    this.masterGain = this.audioContext.createGain();
-    this.masterGain.gain.setValueAtTime(0.5, this.audioContext.currentTime);
-
-    this.analyser = this.audioContext.createAnalyser();
-    this.analyser.fftSize = 2048;
-    this.analyser.smoothingTimeConstant = 0.8;
-
-    this.masterGain.connect(this.analyser);
-    this.analyser.connect(this.audioContext.destination);
-
-    // iOS silent unlock — play empty buffer to fully unlock audio pipeline.
-    // This MUST happen synchronously, inside the same gesture handler.
-    try {
-      const buffer = this.audioContext.createBuffer(1, 1, 22050);
-      const source = this.audioContext.createBufferSource();
-      source.buffer = buffer;
-      source.connect(this.audioContext.destination);
-      source.start(0);
-    } catch (e) {
-      console.warn('[AudioEngine] silent unlock failed:', String(e));
-    }
-
-    // Fire resume() synchronously and don't await — iOS grants the gesture token
-    // to the synchronous call, but waiting on the returned promise loses it.
-    if (
-  this.audioContext.state === 'suspended' ||
-  this.audioContext.state === 'interrupted'
-) {
-  this.audioContext.resume().catch((e) =>
-    console.warn('[AudioEngine] resume rejected:', String(e))
-  );
-}
-    this.isInitialized = true;
-  }
-
+   
   // Get analyzer for visualization
   getAnalyser(): AnalyserNode | null {
     return this.analyser;
