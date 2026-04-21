@@ -50,7 +50,6 @@ export const XYPad: React.FC<XYPadProps> = ({
   const [isActive, setIsActive] = useState(false);
   const hasInteracted = useRef(false);
   const activePointers = useRef<Set<number>>(new Set());
-  const audioReadyRef = useRef(false);
 
   const [gestureColor, setGestureColor] = useState<GestureColorState>({
     hue: 0,
@@ -77,7 +76,6 @@ export const XYPad: React.FC<XYPadProps> = ({
 
       audioEngine.forceSilentUnlock();
       audioEngine.resume();
-      audioReadyRef.current = true;
     } catch (err) {
       console.warn('Audio unlock failed:', err);
     }
@@ -336,7 +334,7 @@ export const XYPad: React.FC<XYPadProps> = ({
 
   const renderTouchPoints = () => {
     return Array.from(touchPoints.values()).map(point => {
-      const baseSize = 60 + Math.sin(Date.now() / 500) * 10;
+      const baseSize = 40 + Math.sin(Date.now() / 500) * 8;
       const size = baseSize * glowSize;
 
       return (
@@ -396,6 +394,7 @@ export const XYPad: React.FC<XYPadProps> = ({
           style={{ background: `hsl(${bgHue} ${bgSat}% ${bgLight}%)` }}
         />
       </div>
+
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <div
           className="h-px w-8 opacity-20"
@@ -421,6 +420,7 @@ export const XYPad: React.FC<XYPadProps> = ({
             >
               SØM
             </div>
+
             <div
               className="mt-3 text-[11px] sm:text-xs tracking-[0.28em] uppercase"
               style={{ color: `hsl(${bgHue} ${bgSat}% ${bgLight}%)` }}
