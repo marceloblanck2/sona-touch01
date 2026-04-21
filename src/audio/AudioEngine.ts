@@ -899,7 +899,19 @@ if (voice.panner) {
     );
   }
 }
+forceSilentUnlock(): void {
+  if (!this.audioContext) return;
 
+  try {
+    const buffer = this.audioContext.createBuffer(1, 1, 22050);
+    const source = this.audioContext.createBufferSource();
+    source.buffer = buffer;
+    source.connect(this.audioContext.destination);
+    source.start(0);
+  } catch (e) {
+    console.warn('[AudioEngine] forceSilentUnlock failed:', String(e));
+  }
+}
   // Ensure audio context is resumed — non-blocking for iOS compatibility
   ensureResumed(): Promise<void> {
   if (
