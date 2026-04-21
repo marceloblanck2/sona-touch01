@@ -1,431 +1,266 @@
-// SØNA Touch 01 - XY Pad Component with Multitouch Support and Trail
+// SØM Touch - Compact Controls for Fullscreen Mode
+// Minimal sliders for live performance — volume, trail, size
 
-import React, { useRef, useCallback, useState, useEffect } from 'react';
-import { GRID_3x3 } from '../../utils/constants';
-import { GridMode } from '../../utils/constants';
+import React from 'react';
 import { HSLColor } from '../../utils/colorUtils';
-import { TrailCanvas } from './TrailCanvas';
-import { audioEngine } from '../../audio/AudioEngine';
+import { Slider } from '../ui/slider';
+import { GridMode, MappingOption, MAPPING_OPTIONS } from '../../utils/constants';
+import { Volume2, Brush, Circle, Minimize2 } from 'lucide-react';
 
-interface TouchPoint {
-  id: number;
-  x: number;
-  y: number;
-}
-
-interface XYPadProps {
-  gridMode: GridMode;
+interface FullscreenControlsProps {
   color: HSLColor;
+  gridMode: GridMode;
+  volume: number;
   trailDuration: number;
   glowSize: number;
-  getVoiceColor?: (touchId: number) => { h: number; s: number; l: number } | null;
-  onTouchStart: (id: number, x: number, y: number) => void;
-  onTouchMove: (id: number, x: number, y: number) => void;
-  onTouchEnd: (id: number) => void;
-  onInteractionStart: () => void;
-  isFullscreen?: boolean;
+  mappingX: MappingOption;
+  mappingY: MappingOption;
+  onModeChange: (mode: GridMode) => void;
+  onVolumeChange: (v: number) => void;
+  onTrailChange: (d: number) => void;
+  onSizeChange: (s: number) => void;
+  onMappingXChange: (v: MappingOption) => void;
+  onMappingYChange: (v: MappingOption) => void;
+  onExit: () => void;
+  isLandscape: boolean;
 }
 
-interface GestureColorState {
-  hue: number;
-  saturation: number;
-  lightness: number;
-}
-
-// Clamp value between min and max
-const clamp = (value: number, min: number, max: number): number =>
-  Math.max(min, Math.min(max, value));
-
-export const XYPad: React.FC<XYPadProps> = ({
-  gridMode,
+export const FullscreenControls: React.FC<FullscreenControlsProps> = ({
   color,
+  gridMode,
+  volume,
   trailDuration,
   glowSize,
-  getVoiceColor,
-  onTouchStart,
-  onTouchMove,
-  onTouchEnd,
-  onInteractionStart,
-  isFullscreen = false,
+  mappingX,
+  mappingY,
+  onModeChange,
+  onVolumeChange,
+  onTrailChange,
+  onSizeChange,
+  onMappingXChange,
+  onMappingYChange,
+  onExit,
+  isLandscape,
 }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [touchPoints, setTouchPoints] = useState<Map<number, TouchPoint>>(new Map());
-  const [isActive, setIsActive] = useState(false);
-  const hasInteracted = useRef(false);
-  const activePointers = useRef<Set<number>>(new Set());
+  const accentColor = `hsl(${color.h} ${color.s}% ${color.l}%)`;
 
-  // Gesture color state with movement speed tracking
-  const [gestureColor, setGestureColor] = useState<GestureColorState>({
-    hue: 0,
-    saturation: 40,
-    lightness: 70,
-  });
-  const gestureColorRef = useRef<GestureColorState>({
-    hue: 0,
-    saturation: 40,
-    lightness: 70,
-  });
-  const lastPositionRef = useRef<{ x: number; y: number } | null>(null);
-  const lastTrailPointRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const sliderStyle = {
+    '--slider-track-bg': 'hsl(220 15% 15%)',
+    '--slider-range-bg': accentColor,
+    '--slider-thumb-bg': accentColor,
+  } as React.CSSProperties;
 
- useEffect(() => {
-  const el = containerRef.current;
-  if (!el) return;
-
-  const unlock = () => {
-    if (audioEngine.isSuspended()) {
-      audioEngine.forceRecreateContext();
-      audioEngine.forceSilentUnlock();
-      audioEngine.resume();
-    } else {
-      audioEngine.initialize();
-      audioEngine.forceSilentUnlock();
-      audioEngine.resume();
-    }
+  const stopPadCapture = (e: React.SyntheticEvent) => {
+    e.stopPropagation();
   };
 
-el.addEventListener('touchstart', unlock, { passive: true });
-el.addEventListener('touchend', unlock, { passive: true });
-el.addEventListener('pointerup', unlock);
+  const CompactSlider = ({
+    icon,
+    value,
+    min,
+    max,
+    step,
+    onChange,
+    label,
+  }: {
+    icon: React.ReactNode;
+    value: number;
+    min: number;
+    max: number;
+    step: number;
+    onChange: (v: number) => void;
+    label: string;
+  }) => (
+    <div
+      className={`flex items-center gap-2 ${isLandscape ? '' : 'flex-1 min-w-[140px]'}`}
+      onPointerDown={stopPadCapture}
+      onTouchStart={stopPadCapture}
+    >
+      <span className="text-muted-foreground shrink-0" style={{ color: accentColor }}>
+        {icon}
+      </span>
 
-  return () => {
-   el.removeEventListener('touchstart', unlock);
-  el.removeEventListener('touchend', unlock);
-  el.removeEventListener('pointerup', unlock);
-  };
-}, []);
-  
-  // Update gesture color — uses audio-derived color when available (GSI mapping),
-  // falls back to position-based color when audio engine hasn't produced a color yet
-  const updateGestureColor = useCallback((x: number, y: number, pointerId?: number) => {
-    const prevPos = lastPositionRef.current;
+      <Slider
+        value={[value]}
+        min={min}
+        max={max}
+        step={step}
+        onValueChange={([v]) => onChange(v)}
+        className="cursor-pointer flex-1 touch-manipulation"
+        style={sliderStyle}
+      />
 
-    // Calculate movement speed (distance from previous position)
-    let speed = 0;
-    if (prevPos) {
-      const dx = x - prevPos.x;
-      const dy = y - prevPos.y;
-      speed = Math.sqrt(dx * dx + dy * dy);
-    }
-    lastPositionRef.current = { x, y };
+      <span className="text-[10px] font-mono text-muted-foreground w-9 text-right shrink-0">
+        {label}
+      </span>
+    </div>
+  );
 
-    // Try to get audio-derived color (GSI: frequency→hue, amplitude→lightness)
-    let hue: number;
-    let lightness: number;
-    let saturation: number;
+  const CompactMapping = ({
+    axis,
+    value,
+    onChange,
+  }: {
+    axis: string;
+    value: MappingOption;
+    onChange: (v: MappingOption) => void;
+  }) => (
+    <div
+      className="flex items-center gap-1.5"
+      onPointerDown={stopPadCapture}
+      onTouchStart={stopPadCapture}
+    >
+      <span
+        className="font-mono text-[10px] font-medium shrink-0"
+        style={{ color: accentColor }}
+      >
+        {axis}→
+      </span>
 
-    const audioColor =
-      pointerId !== undefined && getVoiceColor ? getVoiceColor(pointerId) : null;
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value as MappingOption)}
+        className="h-8 w-[110px] rounded bg-black/30 border border-white/10 text-[11px] px-2 outline-none touch-manipulation"
+        style={{ color: accentColor }}
+      >
+        {MAPPING_OPTIONS.map((opt) => (
+          <option key={opt.value} value={opt.value} className="text-black">
+            {opt.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
 
-    if (audioColor) {
-      // GSI unified mapping: color derived from what the audio is actually doing
-      hue = audioColor.h;
-      lightness = audioColor.l;
-      saturation = audioColor.s;
-    } else {
-      // Fallback: position-based (used before audio is active)
-      const normalizedSpeed = clamp(speed * 10, 0, 1);
-      hue = x * 360;
-      lightness = clamp(40 + y * 60, 40, 100);
-      saturation = clamp(40 + normalizedSpeed * 60, 40, 100);
-    }
-
-    setGestureColor(prev => {
-      const next = {
-        hue,
-        lightness,
-        saturation: prev.saturation * 0.7 + saturation * 0.3,
-      };
-      gestureColorRef.current = next;
-      return next;
-    });
-  }, [getVoiceColor]);
-
-  // Get normalized coordinates from event
-  const getNormalizedCoords = useCallback((clientX: number, clientY: number) => {
-    if (!containerRef.current) return { x: 0, y: 0 };
-
-    const rect = containerRef.current.getBoundingClientRect();
-    const x = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    const y = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
-
-    return { x, y };
-  }, []);
-
-  // Check if this is a valid primary input (left click or touch)
-  const isValidInput = useCallback((e: React.PointerEvent): boolean => {
-    if (e.pointerType === 'mouse' && e.button !== 0) {
-      return false;
-    }
-    return true;
-  }, []);
-
-  // Handle pointer down
-  const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    if (!isValidInput(e)) {
-      return;
-    }
-
-    if (audioEngine.isSuspended()) {
-  audioEngine.forceRecreateContext();
-} else {
-  audioEngine.initialize();
-}
-    
+  const handleModePointer = (mode: GridMode) => (e: React.PointerEvent | React.TouchEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    onModeChange(mode);
+  };
 
-    const id = e.pointerId;
-
-    if (activePointers.current.has(id)) {
-      return;
-    }
-
-    if (!hasInteracted.current) {
-      hasInteracted.current = true;
-    }
-
-    // Call onInteractionStart on EVERY pointerdown to ensure audio context stays alive
-    onInteractionStart();
-
-    const { x, y } = getNormalizedCoords(e.clientX, e.clientY);
-
-    activePointers.current.add(id);
-
-    setTouchPoints(prev => {
-      const next = new Map(prev);
-      next.set(id, { id, x, y });
-      return next;
-    });
-lastTrailPointRef.current.set(id, { x, y });
-    updateGestureColor(x, y, id);
-
-    // Record trail point with current live color
-    if ((window as any).__sonaTrailAdd) {
-      const c = gestureColorRef.current;
-      (window as any).__sonaTrailAdd(x, y, c.hue, c.saturation, c.lightness);
-    }
-
-    setIsActive(true);
-    onTouchStart(id, x, y);
-
-    try {
-      (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    } catch (err) {
-      // Pointer capture may fail in some cases
-    }
-  }, [getNormalizedCoords, onTouchStart, onInteractionStart, isValidInput, updateGestureColor]);
-
- // Handle pointer move
-const handlePointerMove = useCallback((e: React.PointerEvent) => {
-  const id = e.pointerId;
-
-  if (!activePointers.current.has(id)) return;
-
-  e.preventDefault();
-
-  const { x, y } = getNormalizedCoords(e.clientX, e.clientY);
-
-  setTouchPoints(prev => {
-    const next = new Map(prev);
-    next.set(id, { id, x, y });
-    return next;
-  });
-
-  updateGestureColor(x, y, id);
-
-  // Record trail points with interpolation for smoother continuous trace
-  const prevTrail = lastTrailPointRef.current.get(id);
-
-  if (prevTrail && (window as any).__sonaTrailAdd) {
-    const dx = x - prevTrail.x;
-    const dy = y - prevTrail.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-
-    const steps = Math.max(1, Math.ceil(dist * 60));
-    const c = gestureColorRef.current;
-
-    for (let i = 1; i <= steps; i++) {
-      const t = i / steps;
-      const ix = prevTrail.x + dx * t;
-      const iy = prevTrail.y + dy * t;
-      (window as any).__sonaTrailAdd(ix, iy, c.hue, c.saturation, c.lightness);
-    }
-  } else if ((window as any).__sonaTrailAdd) {
-    const c = gestureColorRef.current;
-    (window as any).__sonaTrailAdd(x, y, c.hue, c.saturation, c.lightness);
-  }
-
-  lastTrailPointRef.current.set(id, { x, y });
-
-  onTouchMove(id, x, y);
-}, [getNormalizedCoords, onTouchMove, updateGestureColor]);
-
-  // Handle pointer up/end
-  const handlePointerUp = useCallback((e: React.PointerEvent) => {
-    const id = e.pointerId;
-
-    if (!activePointers.current.has(id)) return;
-
-    e.preventDefault();
-
-    activePointers.current.delete(id);
-    lastTrailPointRef.current.delete(id);
-
-    setTouchPoints(prev => {
-      const next = new Map(prev);
-      next.delete(id);
-      if (next.size === 0) {
-        setIsActive(false);
-        lastPositionRef.current = null;
-      }
-      return next;
-    });
-
-    onTouchEnd(id);
-
-    try {
-      (e.target as HTMLElement).releasePointerCapture(e.pointerId);
-    } catch (err) {
-      // May fail if already released
-    }
-  }, [onTouchEnd]);
-
-  // Handle context menu (prevent right-click menu)
-  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+  const handleExitPointer = (e: React.PointerEvent | React.TouchEvent) => {
     e.preventDefault();
     e.stopPropagation();
-  }, []);
-
-  // Render grid lines
-  const renderGrid = () => {
-    if (gridMode !== 'grid') return null;
-
-    const lines = [];
-    const gridSize = GRID_3x3;
-
-    for (let i = 1; i < gridSize; i++) {
-      const pos = (i / gridSize) * 100;
-
-      lines.push(
-        <line
-          key={`v-${i}`}
-          x1={`${pos}%`}
-          y1="0"
-          x2={`${pos}%`}
-          y2="100%"
-          className="sona-grid-line"
-          style={{ opacity: 0.3 }}
-        />
-      );
-
-      lines.push(
-        <line
-          key={`h-${i}`}
-          x1="0"
-          y1={`${pos}%`}
-          x2="100%"
-          y2={`${pos}%`}
-          className="sona-grid-line"
-          style={{ opacity: 0.3 }}
-        />
-      );
-    }
-
-    return (
-      <svg className="absolute inset-0 w-full h-full pointer-events-none">
-        {lines}
-      </svg>
-    );
+    onExit();
   };
-
-  // Render touch points with gesture-driven vivid color
-  const renderTouchPoints = () => {
-    return Array.from(touchPoints.values()).map(point => {
-      const baseSize = 60 + Math.sin(Date.now() / 500) * 10;
-      const size = baseSize * glowSize;
-
-      return (
-        <div
-          key={point.id}
-          className="absolute rounded-full pointer-events-none animate-pulse-glow"
-          style={{
-            left: `${point.x * 100}%`,
-            top: `${point.y * 100}%`,
-            width: size,
-            height: size,
-            transform: 'translate(-50%, -50%)',
-            background: `radial-gradient(circle, hsl(${gestureColor.hue} ${gestureColor.saturation}% ${gestureColor.lightness}%) 0%, hsl(${gestureColor.hue} ${gestureColor.saturation}% ${gestureColor.lightness}% / 0.4) 60%, transparent 100%)`,
-            boxShadow: `0 0 20px hsl(${gestureColor.hue} ${gestureColor.saturation}% ${gestureColor.lightness}% / 0.6)`,
-          }}
-        />
-      );
-    });
-  };
-
-  // Background color: soft gesture color when active, base color otherwise
-  const bgHue = isActive ? gestureColor.hue : color.h;
-  const bgSat = isActive ? gestureColor.saturation : color.s;
-  const bgLight = isActive ? gestureColor.lightness : color.l;
 
   return (
     <div
-      ref={containerRef}
-      className={`relative w-full overflow-hidden touch-none select-none cursor-crosshair ${
-        isFullscreen ? 'h-full rounded-none' : 'aspect-square rounded-lg'
-      }`}
+      className={`relative flex ${
+        isLandscape
+          ? 'flex-col h-full w-52 p-3 pr-3 pt-16'
+          : 'flex-row flex-wrap items-center w-full p-3 pt-14'
+      } gap-3 bg-background/40 backdrop-blur-sm pointer-events-auto touch-manipulation`}
       style={{
-        background: `
-          radial-gradient(circle at 50% 50%, hsl(${bgHue} ${bgSat}% ${bgLight}% / 0.3) 0%, transparent 60%),
-          linear-gradient(135deg, hsl(220 20% 8%) 0%, hsl(220 18% 12%) 100%)
-        `,
-        boxShadow: isActive
-          ? `inset 0 0 80px hsl(${gestureColor.hue} ${gestureColor.saturation}% ${gestureColor.lightness}% / 0.25), 0 0 50px hsl(${gestureColor.hue} ${gestureColor.saturation}% ${gestureColor.lightness}% / 0.2)`
-          : 'inset 0 2px 10px hsl(220 30% 3% / 0.5)',
-        transition: isActive ? 'none' : 'box-shadow 0.3s ease, background 0.3s ease',
+        borderColor: `hsl(${color.h} ${color.s}% ${color.l}% / 0.15)`,
+        WebkitTouchCallout: 'none',
       }}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
-      onPointerLeave={handlePointerUp}
-      onContextMenu={handleContextMenu}
+      onPointerDown={stopPadCapture}
+      onTouchStart={stopPadCapture}
     >
-      {renderGrid()}
+      {/* Exit button fixed inside controls */}
+      <button
+        type="button"
+        onPointerDown={handleExitPointer}
+        onTouchStart={handleExitPointer}
+        className={`absolute z-50 flex items-center gap-1.5 px-3 py-2 rounded bg-background/50 hover:bg-background/70 transition-colors touch-manipulation ${
+          isLandscape ? 'top-3 left-3' : 'top-3 right-3'
+        }`}
+        style={{
+          color: accentColor,
+          minWidth: 44,
+          minHeight: 44,
+        }}
+      >
+        <Minimize2 size={14} />
+        <span className="text-[10px] font-medium">Exit</span>
+      </button>
 
-      <TrailCanvas trailDuration={trailDuration} glowSize={glowSize} color={color} />
-
-      {renderTouchPoints()}
-
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <div
-          className="w-px h-8 opacity-20"
-          style={{ background: `hsl(${bgHue} ${bgSat}% ${bgLight}%)` }}
-        />
-      </div>
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <div
-          className="h-px w-8 opacity-20"
-          style={{ background: `hsl(${bgHue} ${bgSat}% ${bgLight}%)` }}
-        />
-      </div>
-
-      <div className="absolute bottom-3 right-3 pointer-events-none">
-        <span
-          className="font-mono text-xs uppercase tracking-wider opacity-40"
-          style={{ color: `hsl(${bgHue} ${bgSat}% ${bgLight}%)` }}
+      {/* Mode buttons */}
+      <div className="flex gap-1.5" onPointerDown={stopPadCapture} onTouchStart={stopPadCapture}>
+        <button
+          type="button"
+          onPointerDown={handleModePointer('grid')}
+          onTouchStart={handleModePointer('grid')}
+          className="px-3 py-2 rounded text-[11px] font-medium transition-all touch-manipulation"
+          style={{
+            minWidth: 44,
+            minHeight: 44,
+            background:
+              gridMode === 'grid'
+                ? `hsl(${color.h} ${color.s}% ${color.l}% / 0.25)`
+                : 'hsl(220 15% 12%)',
+            color: gridMode === 'grid' ? accentColor : 'hsl(220 10% 50%)',
+            border:
+              gridMode === 'grid'
+                ? `1px solid hsl(${color.h} ${color.s}% ${color.l}% / 0.4)`
+                : '1px solid hsl(220 15% 18%)',
+          }}
         >
-          {gridMode}
-        </span>
+          Grid
+        </button>
+
+        <button
+          type="button"
+          onPointerDown={handleModePointer('flow')}
+          onTouchStart={handleModePointer('flow')}
+          className="px-3 py-2 rounded text-[11px] font-medium transition-all touch-manipulation"
+          style={{
+            minWidth: 44,
+            minHeight: 44,
+            background:
+              gridMode === 'flow'
+                ? `hsl(${color.h} ${color.s}% ${color.l}% / 0.25)`
+                : 'hsl(220 15% 12%)',
+            color: gridMode === 'flow' ? accentColor : 'hsl(220 10% 50%)',
+            border:
+              gridMode === 'flow'
+                ? `1px solid hsl(${color.h} ${color.s}% ${color.l}% / 0.4)`
+                : '1px solid hsl(220 15% 18%)',
+          }}
+        >
+          Flow
+        </button>
       </div>
 
-      {touchPoints.size === 0 && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <p className="text-muted-foreground text-sm opacity-50 font-light tracking-wide">
-            Touch to play
-          </p>
-        </div>
-      )}
+      {/* Mappings */}
+      <div className={`flex ${isLandscape ? 'flex-col' : ''} gap-1.5`}>
+        <CompactMapping axis="X" value={mappingX} onChange={onMappingXChange} />
+        <CompactMapping axis="Y" value={mappingY} onChange={onMappingYChange} />
+      </div>
+
+      {/* Sliders */}
+      <div className={`flex ${isLandscape ? 'flex-col flex-1' : 'flex-row flex-1 flex-wrap'} gap-2`}>
+        <CompactSlider
+          icon={<Volume2 size={14} />}
+          value={volume * 100}
+          min={0}
+          max={100}
+          step={1}
+          onChange={(v) => onVolumeChange(v / 100)}
+          label={`${Math.round(volume * 100)}%`}
+        />
+
+        <CompactSlider
+          icon={<Brush size={14} />}
+          value={trailDuration * 10}
+          min={0}
+          max={100}
+          step={5}
+          onChange={(v) => onTrailChange(v / 10)}
+          label={trailDuration === 0 ? 'Off' : `${trailDuration.toFixed(1)}s`}
+        />
+
+        <CompactSlider
+          icon={<Circle size={14} />}
+          value={glowSize * 100}
+          min={20}
+          max={300}
+          step={10}
+          onChange={(v) => onSizeChange(v / 100)}
+          label={`${Math.round(glowSize * 100)}%`}
+        />
+      </div>
     </div>
   );
 };
