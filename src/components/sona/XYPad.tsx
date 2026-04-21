@@ -233,11 +233,30 @@ el.addEventListener('pointerup', unlock);
 
     updateGestureColor(x, y, id);
 
-    // Record trail point with current live color
-    if ((window as any).__sonaTrailAdd) {
-      const c = gestureColorRef.current;
-      (window as any).__sonaTrailAdd(x, y, c.hue, c.saturation, c.lightness);
-    }
+   // Record trail points with interpolation for smoother continuous trace
+const prev = touchPoints.get(id);
+
+if (prev && (window as any).__sonaTrailAdd) {
+  const dx = x - prev.x;
+  const dy = y - prev.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+
+  // More distance = more intermediate points
+  const steps = Math.max(1, Math.ceil(dist * 60));
+
+  const c = gestureColorRef.current;
+
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    const ix = prev.x + dx * t;
+    const iy = prev.y + dy * t;
+
+    (window as any).__sonaTrailAdd(ix, iy, c.hue, c.saturation, c.lightness);
+  }
+} else if ((window as any).__sonaTrailAdd) {
+  const c = gestureColorRef.current;
+  (window as any).__sonaTrailAdd(x, y, c.hue, c.saturation, c.lightness);
+}
 
     onTouchMove(id, x, y);
   }, [getNormalizedCoords, onTouchMove, updateGestureColor]);
