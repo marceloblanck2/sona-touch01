@@ -59,30 +59,76 @@ export class AudioEngine {
   private activePointers: Set<number> = new Set();
 
   // Initialize audio context — MUST be called synchronously from a user gesture.
-  // iOS Safari requires that AudioContext creation, silent unlock, and resume()
-  // happen within the same synchronous call stack as the user gesture handler.
-  // Any await before these calls consumes the gesture token and silently fails.
-  initialize(): void {
-   if (this.isInitialized) {
-  // Even if already initialized, try to resume if Safari/iOS put the context
-  // into suspended or interrupted.
+// iOS Safari requires that AudioContext creation, silent unlock, and resume()
+// happen within the same synchronous call stack as the user gesture handler.
+// Any await before these calls consumes the gesture token and silently fails.
+initialize(): void {
+  if (this.isInitialized) {
+    // Even if already initialized, try to resume again for Safari/iOS
+    if (
+      this.audioContext &&
+      (this.audioContext.state === 'suspended' ||
+        this.audioContext.state === 'interrupted')
+    ) {
+      this.audioContext.resume().catch((e) =>
+        console.warn('[AudioEngine] resume on re-init failed:', String(e))
+      );
+    }
+    return;
+  }
+
+  const AudioContextClass =
+    window.AudioContext || (window as any).webkitAudioContext;
+
+  if (!AudioContextClass) {
+    console.error('[AudioEngine] Web Audio API not supported');
+    return;
+  }
+
+  // Must happen synchronously inside the user gesture
+  this.audioContext = new AudioContextClass();
+
+  // iPhone/Safari hard unlock
+  try {
+    const osc = this.audioContext.createOscillator();
+    const gain = this.audioContext.createGain();
+
+    gain.gain.value = 0;
+
+    osc.connect(gain);
+    gain.connect(this.audioContext.destination);
+
+    osc.start();
+    osc.stop(this.audioContext.currentTime + 0.01);
+
+    console.log('[AudioEngine] silent unlock fired');
+  } catch (e) {
+    console.warn('[AudioEngine] silent unlock failed:', String(e));
+  }
+
+  VoiceManager.setAudioContext(this.audioContext);
+
+  this.masterGain = this.audioContext.createGain();
+  this.masterGain.gain.setValueAtTime(0.5, this.audioContext.currentTime);
+
+  this.analyser = this.audioContext.createAnalyser();
+  this.analyser.fftSize = 2048;
+  this.analyser.smoothingTimeConstant = 0.8;
+
+  this.masterGain.connect(this.analyser);
+  this.analyser.connect(this.audioContext.destination);
+
   if (
-    this.audioContext &&
-    (this.audioContext.state === 'suspended' ||
-      this.audioContext.state === 'interrupted')
+    this.audioContext.state === 'suspended' ||
+    this.audioContext.state === 'interrupted'
   ) {
     this.audioContext.resume().catch((e) =>
-      console.warn('[AudioEngine] resume on re-init failed:', String(e))
+      console.warn('[AudioEngine] resume rejected:', String(e))
     );
   }
-  return;
-}
 
-    const AudioContextClass = (window.AudioContext || (window as any).webkitAudioContext);
-    if (!AudioContextClass) {
-      console.error('[AudioEngine] Web Audio API not supported');
-      return;
-    }
+  this.isInitialized = true;
+}
 
     // --- SYNCHRONOUS iOS UNLOCK SEQUENCE ---
     // Everything between here and the end of this method must be synchronous.
@@ -523,6 +569,14 @@ if (panner) {
   // Private: Update voice from XY position based on mappings
   private updateVoiceFromXY(voice: Voice, x: number, y: number): void {
     if (!this.audioContext || !voice.isActive) return;
+// PAN always follows finger X position
+if (voice.panner) {
+  voice.panner.pan.setTargetAtTime(
+    (x - 0.5) * 2,
+    this.audioContext.currentTime,
+    RHYTHM.FAST
+  );
+}
 
     // Calculate intensity from Y position and velocity (higher = more intensity)
     const yIntensity = 1 - y; // Invert: top = high intensity
