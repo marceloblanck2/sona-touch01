@@ -1,5 +1,3 @@
-// SØNA Touch 01 - XY Pad Component with Multitouch Support and Trail
-
 import React, { useRef, useCallback, useState, useEffect } from 'react';
 import { GRID_3x3 } from '../../utils/constants';
 import { GridMode } from '../../utils/constants';
@@ -32,7 +30,6 @@ interface GestureColorState {
   lightness: number;
 }
 
-// Clamp value between min and max
 const clamp = (value: number, min: number, max: number): number =>
   Math.max(min, Math.min(max, value));
 
@@ -53,54 +50,62 @@ export const XYPad: React.FC<XYPadProps> = ({
   const [isActive, setIsActive] = useState(false);
   const hasInteracted = useRef(false);
   const activePointers = useRef<Set<number>>(new Set());
+  const audioReadyRef = useRef(false);
 
-  // Gesture color state with movement speed tracking
   const [gestureColor, setGestureColor] = useState<GestureColorState>({
     hue: 0,
     saturation: 40,
     lightness: 70,
   });
+
   const gestureColorRef = useRef<GestureColorState>({
     hue: 0,
     saturation: 40,
     lightness: 70,
   });
+
   const lastPositionRef = useRef<{ x: number; y: number } | null>(null);
   const lastTrailPointRef = useRef<Map<number, { x: number; y: number }>>(new Map());
 
- useEffect(() => {
-  const el = containerRef.current;
-  if (!el) return;
+  const ensureAudioReady = useCallback(() => {
+    try {
+      if (audioEngine.isSuspended()) {
+        audioEngine.forceRecreateContext();
+      } else {
+        audioEngine.initialize();
+      }
 
-  const unlock = () => {
-    if (audioEngine.isSuspended()) {
-      audioEngine.forceRecreateContext();
       audioEngine.forceSilentUnlock();
       audioEngine.resume();
-    } else {
-      audioEngine.initialize();
-      audioEngine.forceSilentUnlock();
-      audioEngine.resume();
+      audioReadyRef.current = true;
+    } catch (err) {
+      // avoid crashing interaction flow on Safari/iPhone quirks
+      console.warn('Audio unlock failed:', err);
     }
-  };
+  }, []);
 
-el.addEventListener('touchstart', unlock, { passive: true });
-el.addEventListener('touchend', unlock, { passive: true });
-el.addEventListener('pointerup', unlock);
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
 
-  return () => {
-   el.removeEventListener('touchstart', unlock);
-  el.removeEventListener('touchend', unlock);
-  el.removeEventListener('pointerup', unlock);
-  };
-}, []);
-  
-  // Update gesture color — uses audio-derived color when available (GSI mapping),
-  // falls back to position-based color when audio engine hasn't produced a color yet
+    const unlock = () => {
+      ensureAudioReady();
+    };
+
+    el.addEventListener('touchstart', unlock, { passive: true });
+    el.addEventListener('touchend', unlock, { passive: true });
+    el.addEventListener('pointerup', unlock);
+
+    return () => {
+      el.removeEventListener('touchstart', unlock);
+      el.removeEventListener('touchend', unlock);
+      el.removeEventListener('pointerup', unlock);
+    };
+  }, [ensureAudioReady]);
+
   const updateGestureColor = useCallback((x: number, y: number, pointerId?: number) => {
     const prevPos = lastPositionRef.current;
 
-    // Calculate movement speed (distance from previous position)
     let speed = 0;
     if (prevPos) {
       const dx = x - prevPos.x;
@@ -109,7 +114,6 @@ el.addEventListener('pointerup', unlock);
     }
     lastPositionRef.current = { x, y };
 
-    // Try to get audio-derived color (GSI: frequency→hue, amplitude→lightness)
     let hue: number;
     let lightness: number;
     let saturation: number;
@@ -118,12 +122,10 @@ el.addEventListener('pointerup', unlock);
       pointerId !== undefined && getVoiceColor ? getVoiceColor(pointerId) : null;
 
     if (audioColor) {
-      // GSI unified mapping: color derived from what the audio is actually doing
       hue = audioColor.h;
       lightness = audioColor.l;
       saturation = audioColor.s;
     } else {
-      // Fallback: position-based (used before audio is active)
       const normalizedSpeed = clamp(speed * 10, 0, 1);
       hue = x * 360;
       lightness = clamp(40 + y * 60, 40, 100);
@@ -141,7 +143,6 @@ el.addEventListener('pointerup', unlock);
     });
   }, [getVoiceColor]);
 
-  // Get normalized coordinates from event
   const getNormalizedCoords = useCallback((clientX: number, clientY: number) => {
     if (!containerRef.current) return { x: 0, y: 0 };
 
@@ -152,7 +153,6 @@ el.addEventListener('pointerup', unlock);
     return { x, y };
   }, []);
 
-  // Check if this is a valid primary input (left click or touch)
   const isValidInput = useCallback((e: React.PointerEvent): boolean => {
     if (e.pointerType === 'mouse' && e.button !== 0) {
       return false;
@@ -160,18 +160,13 @@ el.addEventListener('pointerup', unlock);
     return true;
   }, []);
 
-  // Handle pointer down
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     if (!isValidInput(e)) {
       return;
     }
 
-    if (audioEngine.isSuspended()) {
-  audioEngine.forceRecreateContext();
-} else {
-  audioEngine.initialize();
-}
-    
+    ensureAudioReady();
+
     e.preventDefault();
     e.stopPropagation();
 
@@ -185,7 +180,6 @@ el.addEventListener('pointerup', unlock);
       hasInteracted.current = true;
     }
 
-    // Call onInteractionStart on EVERY pointerdown to ensure audio context stays alive
     onInteractionStart();
 
     const { x, y } = getNormalizedCoords(e.clientX, e.clientY);
@@ -197,10 +191,10 @@ el.addEventListener('pointerup', unlock);
       next.set(id, { id, x, y });
       return next;
     });
-lastTrailPointRef.current.set(id, { x, y });
+
+    lastTrailPointRef.current.set(id, { x, y });
     updateGestureColor(x, y, id);
 
-    // Record trail point with current live color
     if ((window as any).__sonaTrailAdd) {
       const c = gestureColorRef.current;
       (window as any).__sonaTrailAdd(x, y, c.hue, c.saturation, c.lightness);
@@ -214,54 +208,58 @@ lastTrailPointRef.current.set(id, { x, y });
     } catch (err) {
       // Pointer capture may fail in some cases
     }
-  }, [getNormalizedCoords, onTouchStart, onInteractionStart, isValidInput, updateGestureColor]);
+  }, [
+    ensureAudioReady,
+    getNormalizedCoords,
+    onTouchStart,
+    onInteractionStart,
+    isValidInput,
+    updateGestureColor,
+  ]);
 
- // Handle pointer move
-const handlePointerMove = useCallback((e: React.PointerEvent) => {
-  const id = e.pointerId;
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    const id = e.pointerId;
 
-  if (!activePointers.current.has(id)) return;
+    if (!activePointers.current.has(id)) return;
 
-  e.preventDefault();
+    e.preventDefault();
 
-  const { x, y } = getNormalizedCoords(e.clientX, e.clientY);
+    const { x, y } = getNormalizedCoords(e.clientX, e.clientY);
 
-  setTouchPoints(prev => {
-    const next = new Map(prev);
-    next.set(id, { id, x, y });
-    return next;
-  });
+    setTouchPoints(prev => {
+      const next = new Map(prev);
+      next.set(id, { id, x, y });
+      return next;
+    });
 
-  updateGestureColor(x, y, id);
+    updateGestureColor(x, y, id);
 
-  // Record trail points with interpolation for smoother continuous trace
-  const prevTrail = lastTrailPointRef.current.get(id);
+    const prevTrail = lastTrailPointRef.current.get(id);
 
-  if (prevTrail && (window as any).__sonaTrailAdd) {
-    const dx = x - prevTrail.x;
-    const dy = y - prevTrail.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (prevTrail && (window as any).__sonaTrailAdd) {
+      const dx = x - prevTrail.x;
+      const dy = y - prevTrail.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
 
-    const steps = Math.max(1, Math.ceil(dist * 60));
-    const c = gestureColorRef.current;
+      const steps = Math.max(1, Math.ceil(dist * 60));
+      const c = gestureColorRef.current;
 
-    for (let i = 1; i <= steps; i++) {
-      const t = i / steps;
-      const ix = prevTrail.x + dx * t;
-      const iy = prevTrail.y + dy * t;
-      (window as any).__sonaTrailAdd(ix, iy, c.hue, c.saturation, c.lightness);
+      for (let i = 1; i <= steps; i++) {
+        const t = i / steps;
+        const ix = prevTrail.x + dx * t;
+        const iy = prevTrail.y + dy * t;
+        (window as any).__sonaTrailAdd(ix, iy, c.hue, c.saturation, c.lightness);
+      }
+    } else if ((window as any).__sonaTrailAdd) {
+      const c = gestureColorRef.current;
+      (window as any).__sonaTrailAdd(x, y, c.hue, c.saturation, c.lightness);
     }
-  } else if ((window as any).__sonaTrailAdd) {
-    const c = gestureColorRef.current;
-    (window as any).__sonaTrailAdd(x, y, c.hue, c.saturation, c.lightness);
-  }
 
-  lastTrailPointRef.current.set(id, { x, y });
+    lastTrailPointRef.current.set(id, { x, y });
 
-  onTouchMove(id, x, y);
-}, [getNormalizedCoords, onTouchMove, updateGestureColor]);
+    onTouchMove(id, x, y);
+  }, [getNormalizedCoords, onTouchMove, updateGestureColor]);
 
-  // Handle pointer up/end
   const handlePointerUp = useCallback((e: React.PointerEvent) => {
     const id = e.pointerId;
 
@@ -291,13 +289,11 @@ const handlePointerMove = useCallback((e: React.PointerEvent) => {
     }
   }, [onTouchEnd]);
 
-  // Handle context menu (prevent right-click menu)
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
   }, []);
 
-  // Render grid lines
   const renderGrid = () => {
     if (gridMode !== 'grid') return null;
 
@@ -339,7 +335,6 @@ const handlePointerMove = useCallback((e: React.PointerEvent) => {
     );
   };
 
-  // Render touch points with gesture-driven vivid color
   const renderTouchPoints = () => {
     return Array.from(touchPoints.values()).map(point => {
       const baseSize = 60 + Math.sin(Date.now() / 500) * 10;
@@ -363,7 +358,6 @@ const handlePointerMove = useCallback((e: React.PointerEvent) => {
     });
   };
 
-  // Background color: soft gesture color when active, base color otherwise
   const bgHue = isActive ? gestureColor.hue : color.h;
   const bgSat = isActive ? gestureColor.saturation : color.s;
   const bgLight = isActive ? gestureColor.lightness : color.l;
