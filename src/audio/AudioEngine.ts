@@ -912,6 +912,33 @@ forceSilentUnlock(): void {
     console.warn('[AudioEngine] forceSilentUnlock failed:', String(e));
   }
 }
+  forceRecreateContext(): void {
+  try {
+    if (this.audioContext) {
+      this.audioContext.close();
+    }
+  } catch (e) {}
+
+  const AudioContextClass =
+    window.AudioContext || (window as any).webkitAudioContext;
+
+  if (!AudioContextClass) return;
+
+  this.audioContext = new AudioContextClass();
+
+  try {
+    const buffer = this.audioContext.createBuffer(1, 1, 22050);
+    const source = this.audioContext.createBufferSource();
+    source.buffer = buffer;
+    source.connect(this.audioContext.destination);
+    source.start(0);
+  } catch (e) {}
+
+  this.masterGain = this.audioContext.createGain();
+  this.masterGain.connect(this.audioContext.destination);
+
+  this.isInitialized = true;
+}
   // Ensure audio context is resumed — non-blocking for iOS compatibility
   ensureResumed(): Promise<void> {
   if (
