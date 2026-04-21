@@ -10,8 +10,7 @@ import { FullscreenControls } from './FullscreenControls';
 import { PresetPanel } from './PresetPanel';
 import { VoiceIndicator } from './VoiceIndicator';
 import { Preset } from '../../presets/PresetManager';
-import { MappingOption, GridMode } from '../../utils/constants';
-import { Maximize2, Minimize2 } from 'lucide-react';
+import { Maximize2 } from 'lucide-react';
 import { DebugOverlay } from '../DebugOverlay';
 
 export const SonaPad: React.FC = () => {
@@ -27,7 +26,7 @@ export const SonaPad: React.FC = () => {
     window.addEventListener('resize', check);
     return () => window.removeEventListener('resize', check);
   }, []);
-  
+
   const {
     isInitialized,
     activeVoices,
@@ -47,7 +46,6 @@ export const SonaPad: React.FC = () => {
     applySettings,
     stopAllSound,
     getVoiceColor,
-    getAverageColor,
   } = useAudioEngine();
 
   const handleLoadPreset = useCallback((preset: Preset) => {
@@ -67,8 +65,8 @@ export const SonaPad: React.FC = () => {
     `;
 
     return (
-      <div 
-        className={`fixed inset-0 z-50 flex ${isLandscape ? 'flex-row' : 'flex-col'}`}
+      <div
+        className={`fixed inset-0 z-50 flex overflow-hidden ${isLandscape ? 'flex-row' : 'flex-col'}`}
         style={{
           background: fullscreenBg,
           paddingTop: 'env(safe-area-inset-top)',
@@ -78,29 +76,32 @@ export const SonaPad: React.FC = () => {
         }}
       >
         <DebugOverlay />
+
         {/* Landscape: controls on the LEFT */}
         {isLandscape && (
-          <FullscreenControls
-            color={color}
-            gridMode={gridMode}
-            volume={masterVolume}
-            trailDuration={trailDuration}
-            glowSize={glowSize}
-            mappingX={mappings.x}
-            mappingY={mappings.y}
-            onModeChange={updateGridMode}
-            onVolumeChange={updateVolume}
-            onTrailChange={setTrailDuration}
-            onSizeChange={setGlowSize}
-            onMappingXChange={(v) => updateMapping('x', v)}
-            onMappingYChange={(v) => updateMapping('y', v)}
-            onExit={() => setIsFullscreen(false)}
-            isLandscape={true}
-          />
+          <div className="relative z-20 shrink-0 pointer-events-auto">
+            <FullscreenControls
+              color={color}
+              gridMode={gridMode}
+              volume={masterVolume}
+              trailDuration={trailDuration}
+              glowSize={glowSize}
+              mappingX={mappings.x}
+              mappingY={mappings.y}
+              onModeChange={updateGridMode}
+              onVolumeChange={updateVolume}
+              onTrailChange={setTrailDuration}
+              onSizeChange={setGlowSize}
+              onMappingXChange={(v) => updateMapping('x', v)}
+              onMappingYChange={(v) => updateMapping('y', v)}
+              onExit={() => setIsFullscreen(false)}
+              isLandscape={true}
+            />
+          </div>
         )}
-        
+
         {/* XY Pad — takes remaining space */}
-        <div className="flex-1 p-1">
+        <div className="relative z-0 flex-1 min-h-0 min-w-0 p-1">
           <div className="h-full w-full">
             <XYPad
               gridMode={gridMode}
@@ -119,30 +120,32 @@ export const SonaPad: React.FC = () => {
 
         {/* Portrait: controls on the BOTTOM */}
         {!isLandscape && (
-          <FullscreenControls
-            color={color}
-            gridMode={gridMode}
-            volume={masterVolume}
-            trailDuration={trailDuration}
-            glowSize={glowSize}
-            mappingX={mappings.x}
-            mappingY={mappings.y}
-            onModeChange={updateGridMode}
-            onVolumeChange={updateVolume}
-            onTrailChange={setTrailDuration}
-            onSizeChange={setGlowSize}
-            onMappingXChange={(v) => updateMapping('x', v)}
-            onMappingYChange={(v) => updateMapping('y', v)}
-            onExit={() => setIsFullscreen(false)}
-            isLandscape={false}
-          />
+          <div className="relative z-20 shrink-0 pointer-events-auto">
+            <FullscreenControls
+              color={color}
+              gridMode={gridMode}
+              volume={masterVolume}
+              trailDuration={trailDuration}
+              glowSize={glowSize}
+              mappingX={mappings.x}
+              mappingY={mappings.y}
+              onModeChange={updateGridMode}
+              onVolumeChange={updateVolume}
+              onTrailChange={setTrailDuration}
+              onSizeChange={setGlowSize}
+              onMappingXChange={(v) => updateMapping('x', v)}
+              onMappingYChange={(v) => updateMapping('y', v)}
+              onExit={() => setIsFullscreen(false)}
+              isLandscape={false}
+            />
+          </div>
         )}
       </div>
     );
   }
 
   return (
-    <div 
+    <div
       className="min-h-screen w-full px-4 py-4 md:px-8 md:py-6"
       style={{
         background: `
@@ -154,9 +157,9 @@ export const SonaPad: React.FC = () => {
     >
       <div className="max-w-7xl mx-auto">
         <DebugOverlay />
-        <Header 
-          activeVoices={activeVoices} 
-          color={color} 
+        <Header
+          activeVoices={activeVoices}
+          color={color}
           isInitialized={isInitialized}
           onStop={stopAllSound}
         />
@@ -165,7 +168,7 @@ export const SonaPad: React.FC = () => {
           {/* Main XY Pad Area */}
           <div className="lg:col-span-8 space-y-4">
             {/* XY Pad with Fullscreen Toggle */}
-            <div 
+            <div
               className="sona-panel p-4 relative"
               style={{
                 borderColor: `hsl(${color.h} ${color.s}% ${color.l}% / 0.15)`,
@@ -181,12 +184,12 @@ export const SonaPad: React.FC = () => {
                 }}
                 className="absolute top-2 right-2 z-20 flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-background/40 hover:bg-background/60 transition-colors backdrop-blur-sm touch-manipulation"
                 style={{ color: `hsl(${color.h} ${color.s}% ${color.l}%)` }}
-                title="Enter Focus Mode"
+                title="Enter Fullscreen"
               >
                 <Maximize2 className="w-4 h-4" />
-                <span className="text-xs font-medium hidden sm:inline">Focus</span>
+                <span className="text-xs font-medium hidden sm:inline">Fullscreen</span>
               </button>
-              
+
               <XYPad
                 gridMode={gridMode}
                 color={color}
@@ -205,14 +208,14 @@ export const SonaPad: React.FC = () => {
               <div className="flex-1">
                 <Waveform data={waveformData} color={color} height={80} />
               </div>
-              <div 
+              <div
                 className="sona-panel px-4 py-3"
                 style={{
                   borderColor: `hsl(${color.h} ${color.s}% ${color.l}% / 0.1)`,
                 }}
               >
-                <VoiceIndicator 
-                  activeVoices={activeVoices} 
+                <VoiceIndicator
+                  activeVoices={activeVoices}
                   color={color}
                   showText={true}
                 />
@@ -222,7 +225,7 @@ export const SonaPad: React.FC = () => {
 
           {/* Control Panel */}
           <div className="lg:col-span-4 space-y-6">
-            <div 
+            <div
               className="sona-panel p-5"
               style={{
                 borderColor: `hsl(${color.h} ${color.s}% ${color.l}% / 0.1)`,
@@ -246,7 +249,7 @@ export const SonaPad: React.FC = () => {
               />
             </div>
 
-            <div 
+            <div
               className="sona-panel p-5"
               style={{
                 borderColor: `hsl(${color.h} ${color.s}% ${color.l}% / 0.1)`,
