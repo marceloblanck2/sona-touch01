@@ -139,6 +139,7 @@ export const XYPad: React.FC<XYPadProps> = ({
     }
 
     audioEngine.initialize();
+    audioEngine.forceSilentUnlock();
     audioEngine.resume();
     
     e.preventDefault();
