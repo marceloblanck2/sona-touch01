@@ -32,9 +32,9 @@ export function useAudioEngine() {
   // Ensure AudioContext is running - call on any user gesture (non-blocking for iOS)
   const ensureAudioUnlocked = useCallback(() => {
     if (!audioUnlockNeeded.current) return;
-    
+
     try {
-      // Fire resume without awaiting — iOS hangs on await resume()
+      // Fire resume without awaiting — iOS can lose the gesture token on await
       audioEngine.ensureResumed();
       audioUnlockNeeded.current = false;
     } catch (e) {
@@ -48,7 +48,7 @@ export function useAudioEngine() {
   const initialize = useCallback(() => {
     try {
       if (!isInitialized) {
-        // initialize() is synchronous now — critical for iOS Safari
+        // initialize() must run synchronously inside the gesture stack on iOS
         audioEngine.initialize();
         audioUnlockNeeded.current = false;
 
@@ -61,14 +61,17 @@ export function useAudioEngine() {
         applySynthColor(color);
 
         // Replay the pending touch that triggered initialization.
-        // createVoice is async but we don't await — fire and forget is fine here.
+        // Do not await here on iOS.
         if (pendingTouch.current) {
           const { id, x, y } = pendingTouch.current;
           pendingTouch.current = null;
           activeTouches.current.add(id);
-          audioEngine.createVoice(id, x, y).then(() => {
-            setActiveVoices(audioEngine.getActiveVoiceCount());
-          }).catch((e) => console.warn('[initialize] replay touch failed:', e));
+
+          audioEngine.createVoice(id, x, y)
+            .then(() => {
+              setActiveVoices(audioEngine.getActiveVoiceCount());
+            })
+            .catch((e) => console.warn('[initialize] replay touch failed:', e));
         }
       } else {
         ensureAudioUnlocked();
@@ -119,12 +122,15 @@ export function useAudioEngine() {
   }, []);
 
   // Touch handlers with duplicate prevention and audio unlock
-  const handleTouchStart = useCallback(async (touchId: number, x: number, y: number) => {
+  const handleTouchStart = useCallback((touchId: number, x: number, y: number) => {
     (window as any).__lastPointerDown = performance.now();
+
     try {
-      // If not initialized yet, store this touch to be replayed after init completes
+      // If the React state still says "not initialized", initialize here
+      // inside the same gesture. This is important for iPhone/Safari.
       if (!isInitialized) {
         pendingTouch.current = { id: touchId, x, y };
+        initialize();
         return;
       }
 
@@ -135,16 +141,24 @@ export function useAudioEngine() {
 
       // Ensure audio is unlocked on first gesture after page visibility change
       if (audioUnlockNeeded.current) {
-        await ensureAudioUnlocked();
+        ensureAudioUnlocked();
       }
 
       activeTouches.current.add(touchId);
-      await audioEngine.createVoice(touchId, x, y);
-      setActiveVoices(audioEngine.getActiveVoiceCount());
+
+      // Do not await here — keep gesture flow simple for iOS Safari
+      audioEngine.createVoice(touchId, x, y)
+        .then(() => {
+          setActiveVoices(audioEngine.getActiveVoiceCount());
+        })
+        .catch((e) => {
+          console.warn('[handleTouchStart] createVoice error:', e);
+          activeTouches.current.delete(touchId);
+        });
     } catch (e) {
       console.warn('[handleTouchStart] error:', e);
     }
-  }, [isInitialized, ensureAudioUnlocked]);
+  }, [isInitialized, initialize, ensureAudioUnlocked]);
 
   const handleTouchMove = useCallback((touchId: number, x: number, y: number) => {
     if (!isInitialized) return;
@@ -155,13 +169,18 @@ export function useAudioEngine() {
 
   const handleTouchEnd = useCallback((touchId: number) => {
     if (!isInitialized) return;
-    
+
+    // If touch was pending init but ended before replay, clear it
+    if (pendingTouch.current?.id === touchId) {
+      pendingTouch.current = null;
+    }
+
     // Only release if touch was tracked
     if (!activeTouches.current.has(touchId)) return;
-    
+
     activeTouches.current.delete(touchId);
     audioEngine.releaseVoice(touchId);
-    
+
     // Update voice count after release
     setActiveVoices(audioEngine.getActiveVoiceCount());
   }, [isInitialized]);
@@ -240,16 +259,16 @@ export function useAudioEngine() {
     // Step 1: Stop all sound and clear all loops
     audioEngine.resetAudioState();
     setActiveVoices(0);
-    
+
     // Step 2: Apply new settings after audio is reset
     const newMappings = { x: settings.mappingX, y: settings.mappingY };
     setMappings(newMappings);
     audioEngine.setMappings(newMappings);
-    
+
     // Note: Don't call setGridMode here as it would reset audio again
     // Just update the internal mode without the reset
     setGridMode(settings.mode);
-    
+
     setColor(settings.color);
     const params = colorToAudioParams(settings.color);
     audioEngine.setSynestheticParams(params);
