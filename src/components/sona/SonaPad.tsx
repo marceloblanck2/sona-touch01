@@ -4,33 +4,14 @@ import { Header } from './Header';
 import { XYPad } from './XYPad';
 import { Waveform } from './Waveform';
 import { ControlPanel } from './ControlPanel';
-import { FullscreenControls } from './FullscreenControls';
 import { PresetPanel } from './PresetPanel';
 import { VoiceIndicator } from './VoiceIndicator';
 import { Preset } from '../../presets/PresetManager';
 import { Maximize2, Minimize2 } from 'lucide-react';
 import { DebugOverlay } from '../DebugOverlay';
 
-const FULLSCREEN_SIZE_STEPS = [
-  0.3, 0.45, 0.6, 0.75, 0.9,
-  1, 1.15, 1.3, 1.45, 1.6,
-  1.8, 2, 2.3, 2.6, 3,
-];
-
-const getClosestStepIndex = (value: number, steps: number[]) => {
-  let closestIndex = 0;
-  let minDiff = Infinity;
-
-  steps.forEach((step, index) => {
-    const diff = Math.abs(step - value);
-    if (diff < minDiff) {
-      minDiff = diff;
-      closestIndex = index;
-    }
-  });
-
-  return closestIndex;
-};
+const clamp = (value: number, min: number, max: number) =>
+  Math.max(min, Math.min(max, value));
 
 const glowToVolume = (size: number) => {
   const normalized = (size - 0.3) / (3 - 0.3);
@@ -80,17 +61,22 @@ export const SonaPad: React.FC = () => {
     });
   }, [applySettings]);
 
-  const handleFullscreenSizeChange = useCallback((direction: 'up' | 'down') => {
-    const index = getClosestStepIndex(glowSize, FULLSCREEN_SIZE_STEPS);
-    const nextIndex =
-      direction === 'up'
-        ? Math.min(FULLSCREEN_SIZE_STEPS.length - 1, index + 1)
-        : Math.max(0, index - 1);
+  const handleAdjustGlow = useCallback((delta: number) => {
+    setGlowSize((prev) => {
+      const next = clamp(prev + delta * 0.15, 0.3, 3);
+      updateVolume(glowToVolume(next));
+      return next;
+    });
+  }, [updateVolume]);
 
-    const nextGlow = FULLSCREEN_SIZE_STEPS[nextIndex];
-    setGlowSize(nextGlow);
-    updateVolume(glowToVolume(nextGlow));
-  }, [glowSize, updateVolume]);
+  const handleAdjustTrail = useCallback((delta: number) => {
+    setTrailDuration((prev) => clamp(prev + delta * 0.35, 0.5, 8));
+  }, []);
+
+  const handleAdjustVolume = useCallback((delta: number) => {
+    const next = clamp(masterVolume + delta * 0.08, 0, 1);
+    updateVolume(next);
+  }, [masterVolume, updateVolume]);
 
   if (isFullscreen) {
     const fullscreenBg = `
@@ -125,6 +111,9 @@ export const SonaPad: React.FC = () => {
             onTouchEnd={handleTouchEnd}
             onInteractionStart={initialize}
             isFullscreen={true}
+            onAdjustGlow={handleAdjustGlow}
+            onAdjustTrail={handleAdjustTrail}
+            onAdjustVolume={handleAdjustVolume}
           />
 
           <div
@@ -132,42 +121,6 @@ export const SonaPad: React.FC = () => {
               isLandscape ? 'top-3 left-3' : 'top-3 right-3'
             }`}
           >
-            <button
-              type="button"
-              onPointerDown={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                handleFullscreenSizeChange('down');
-              }}
-              className="h-10 w-10 rounded-md border text-lg"
-              style={{
-                color: `hsl(${color.h} ${color.s}% ${color.l}%)`,
-                borderColor: `hsl(${color.h} ${color.s}% ${color.l}% / 0.25)`,
-                background: 'hsl(220 15% 12% / 0.9)',
-              }}
-              title="Diminuir tamanho e volume"
-            >
-              −
-            </button>
-
-            <button
-              type="button"
-              onPointerDown={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                handleFullscreenSizeChange('up');
-              }}
-              className="h-10 w-10 rounded-md border text-lg"
-              style={{
-                color: `hsl(${color.h} ${color.s}% ${color.l}%)`,
-                borderColor: `hsl(${color.h} ${color.s}% ${color.l}% / 0.25)`,
-                background: 'hsl(220 15% 12% / 0.9)',
-              }}
-              title="Aumentar tamanho e volume"
-            >
-              +
-            </button>
-
             <button
               type="button"
               onPointerDown={(e) => {
@@ -246,6 +199,9 @@ export const SonaPad: React.FC = () => {
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
                 onInteractionStart={initialize}
+                onAdjustGlow={handleAdjustGlow}
+                onAdjustTrail={handleAdjustTrail}
+                onAdjustVolume={handleAdjustVolume}
               />
             </div>
 
