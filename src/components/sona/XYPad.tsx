@@ -22,8 +22,6 @@ interface XYPadProps {
   onTouchEnd: (id: number) => void;
   onInteractionStart: () => void;
   isFullscreen?: boolean;
-
-  // opcionais: para os botões + e -
   onAdjustGlow?: (delta: number) => void;
   onAdjustTrail?: (delta: number) => void;
   onAdjustVolume?: (delta: number) => void;
@@ -84,9 +82,6 @@ export const XYPad: React.FC<XYPadProps> = ({
   onTouchEnd,
   onInteractionStart,
   isFullscreen = false,
-  onAdjustGlow,
-  onAdjustTrail,
-  onAdjustVolume,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -173,23 +168,19 @@ export const XYPad: React.FC<XYPadProps> = ({
     };
   }, [touchPoints.size]);
 
- const getFallbackVisualColor = useCallback((x: number, y: number, speed: number): GestureColorState => {
-  const normalizedSpeed = clamp(speed * 8, 0, 1);
+  const getFallbackVisualColor = useCallback((x: number, y: number, speed: number): GestureColorState => {
+    const normalizedSpeed = clamp(speed * 8, 0, 1);
 
-  // Esquerda = vermelho | direita = violeta/azul
-  // Sem repetir vermelho na ponta direita
-  const hue = mapRange(x, 0, 1, 0, 280);
+    const hue = mapRange(x, 0, 1, 0, 280);
+    const saturation = clamp(mapRange(y, 1, 0, 78, 96) + normalizedSpeed * 4, 70, 98);
+    const lightness = clamp(mapRange(y, 1, 0, 14, 78) + normalizedSpeed * 3, 10, 82);
 
-  // Embaixo escuro, em cima claro
-  const saturation = clamp(mapRange(y, 1, 0, 78, 96) + normalizedSpeed * 4, 70, 98);
-  const lightness = clamp(mapRange(y, 1, 0, 14, 78) + normalizedSpeed * 3, 10, 82);
+    return { hue, saturation, lightness };
+  }, []);
 
-  return { hue, saturation, lightness };
-}, []);
-
- const getVisualColorForPointer = useCallback((pointerId: number, x: number, y: number, speed: number) => {
-  return getFallbackVisualColor(x, y, speed);
-}, [getFallbackVisualColor]);
+  const getVisualColorForPointer = useCallback((pointerId: number, x: number, y: number, speed: number) => {
+    return getFallbackVisualColor(x, y, speed);
+  }, [getFallbackVisualColor]);
 
   const updateGestureColor = useCallback((x: number, y: number, pointerId?: number) => {
     const prevPos = lastPositionRef.current;
@@ -344,9 +335,7 @@ export const XYPad: React.FC<XYPadProps> = ({
   }, []);
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    if (!isValidInput(e)) {
-      return;
-    }
+    if (!isValidInput(e)) return;
 
     ensureAudioReady();
 
@@ -354,10 +343,7 @@ export const XYPad: React.FC<XYPadProps> = ({
     e.stopPropagation();
 
     const id = e.pointerId;
-
-    if (activePointers.current.has(id)) {
-      return;
-    }
+    if (activePointers.current.has(id)) return;
 
     if (!hasInteracted.current) {
       hasInteracted.current = true;
@@ -401,9 +387,7 @@ export const XYPad: React.FC<XYPadProps> = ({
 
     try {
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    } catch (err) {
-      // ignore
-    }
+    } catch (err) {}
   }, [
     ensureAudioReady,
     getNormalizedCoords,
@@ -416,7 +400,6 @@ export const XYPad: React.FC<XYPadProps> = ({
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     const id = e.pointerId;
-
     if (!activePointers.current.has(id)) return;
 
     e.preventDefault();
@@ -437,7 +420,6 @@ export const XYPad: React.FC<XYPadProps> = ({
 
   const handlePointerUp = useCallback((e: React.PointerEvent) => {
     const id = e.pointerId;
-
     if (!activePointers.current.has(id)) return;
 
     e.preventDefault();
@@ -460,9 +442,7 @@ export const XYPad: React.FC<XYPadProps> = ({
 
     try {
       (e.target as HTMLElement).releasePointerCapture(e.pointerId);
-    } catch (err) {
-      // ignore
-    }
+    } catch (err) {}
   }, [onTouchEnd]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
@@ -582,48 +562,6 @@ export const XYPad: React.FC<XYPadProps> = ({
     });
   };
 
-  const renderStepper = (
-    label: string,
-    onMinus?: (() => void),
-    onPlus?: (() => void)
-  ) => {
-    if (!onMinus || !onPlus) return null;
-
-    return (
-      <div className="flex items-center gap-2 rounded-2xl bg-black/30 backdrop-blur-md px-2 py-2 shadow-lg">
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onMinus();
-          }}
-          className="h-12 w-12 rounded-xl bg-white/12 text-white text-2xl leading-none active:scale-95"
-          style={{ touchAction: 'manipulation' }}
-          aria-label={`${label} minus`}
-        >
-          -
-        </button>
-
-        <div className="min-w-[58px] text-center text-[10px] uppercase tracking-[0.18em] text-white/80">
-          {label}
-        </div>
-
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onPlus();
-          }}
-          className="h-12 w-12 rounded-xl bg-white/12 text-white text-2xl leading-none active:scale-95"
-          style={{ touchAction: 'manipulation' }}
-          aria-label={`${label} plus`}
-        >
-          +
-        </button>
-      </div>
-    );
-  };
-
   const bgHue = isActive ? gestureColor.hue : color.h;
   const bgSat = isActive ? gestureColor.saturation : color.s;
   const bgLight = isActive ? gestureColor.lightness : color.l;
@@ -651,30 +589,8 @@ export const XYPad: React.FC<XYPadProps> = ({
       onContextMenu={handleContextMenu}
     >
       {renderGrid()}
-
       <TrailCanvas trailDuration={trailDuration} glowSize={glowSize} color={color} />
-
       {renderTouchPoints()}
-
-      <div className="absolute left-3 top-1/2 -translate-y-1/2 z-20 flex flex-col gap-3 pointer-events-auto">
-        {renderStepper(
-          'glow',
-          onAdjustGlow ? () => onAdjustGlow(-1) : undefined,
-          onAdjustGlow ? () => onAdjustGlow(1) : undefined
-        )}
-
-        {renderStepper(
-          'trail',
-          onAdjustTrail ? () => onAdjustTrail(-1) : undefined,
-          onAdjustTrail ? () => onAdjustTrail(1) : undefined
-        )}
-
-        {renderStepper(
-          'vol',
-          onAdjustVolume ? () => onAdjustVolume(-1) : undefined,
-          onAdjustVolume ? () => onAdjustVolume(1) : undefined
-        )}
-      </div>
 
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <div
