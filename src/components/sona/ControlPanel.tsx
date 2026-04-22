@@ -27,7 +27,7 @@ interface ControlPanelProps {
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
 
-interface StackedStepperProps {
+interface InlineStepperProps {
   label: string;
   value: string;
   color: HSLColor;
@@ -35,7 +35,7 @@ interface StackedStepperProps {
   onPlus: () => void;
 }
 
-const StackedStepper: React.FC<StackedStepperProps> = ({
+const InlineStepper: React.FC<InlineStepperProps> = ({
   label,
   value,
   color,
@@ -43,46 +43,42 @@ const StackedStepper: React.FC<StackedStepperProps> = ({
   onPlus,
 }) => {
   return (
-    <div className="space-y-1">
-      <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+    <div className="grid grid-cols-[72px_32px_52px_32px] items-center gap-2 justify-start">
+      <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground text-left">
         {label}
       </div>
 
-      <div
-        className="grid grid-cols-[32px_56px_32px] items-center gap-2 w-[136px]"
+      <button
+        type="button"
+        onClick={onMinus}
+        className="h-8 w-8 rounded-md border text-sm leading-none active:scale-95 transition"
+        style={{
+          borderColor: `hsl(${color.h} ${color.s}% ${color.l}% / 0.25)`,
+          color: `hsl(${color.h} ${color.s}% ${color.l}%)`,
+          background: `hsl(${color.h} ${color.s}% ${color.l}% / 0.05)`,
+        }}
+        aria-label={`Decrease ${label}`}
       >
-        <button
-          type="button"
-          onClick={onMinus}
-          className="h-8 w-8 rounded-md border text-sm leading-none active:scale-95 transition"
-          style={{
-            borderColor: `hsl(${color.h} ${color.s}% ${color.l}% / 0.25)`,
-            color: `hsl(${color.h} ${color.s}% ${color.l}%)`,
-            background: `hsl(${color.h} ${color.s}% ${color.l}% / 0.05)`,
-          }}
-          aria-label={`Decrease ${label}`}
-        >
-          –
-        </button>
+        –
+      </button>
 
-        <div className="text-sm text-center text-foreground/90">
-          {value}
-        </div>
-
-        <button
-          type="button"
-          onClick={onPlus}
-          className="h-8 w-8 rounded-md border text-sm leading-none active:scale-95 transition"
-          style={{
-            borderColor: `hsl(${color.h} ${color.s}% ${color.l}% / 0.25)`,
-            color: `hsl(${color.h} ${color.s}% ${color.l}%)`,
-            background: `hsl(${color.h} ${color.s}% ${color.l}% / 0.05)`,
-          }}
-          aria-label={`Increase ${label}`}
-        >
-          +
-        </button>
+      <div className="text-sm text-center text-foreground/90">
+        {value}
       </div>
+
+      <button
+        type="button"
+        onClick={onPlus}
+        className="h-8 w-8 rounded-md border text-sm leading-none active:scale-95 transition"
+        style={{
+          borderColor: `hsl(${color.h} ${color.s}% ${color.l}% / 0.25)`,
+          color: `hsl(${color.h} ${color.s}% ${color.l}%)`,
+          background: `hsl(${color.h} ${color.s}% ${color.l}% / 0.05)`,
+        }}
+        aria-label={`Increase ${label}`}
+      >
+        +
+      </button>
     </div>
   );
 };
@@ -105,7 +101,6 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 }) => {
   return (
     <div className="space-y-4">
-      {/* MODE */}
       <div className="space-y-1">
         <label className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
           Mode
@@ -113,7 +108,6 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         <ModeToggle mode={mode} onChange={onModeChange} color={color} />
       </div>
 
-      {/* MAPPING */}
       <div className="space-y-2">
         <label className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
           Mapping
@@ -134,9 +128,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         />
       </div>
 
-      {/* STEP CONTROLS */}
-      <div className="space-y-3 pt-1">
-        <StackedStepper
+      <div className="space-y-2 pt-1">
+        <InlineStepper
           label="Volume"
           value={`${Math.round(volume * 100)}%`}
           color={color}
@@ -144,7 +137,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           onPlus={() => onVolumeChange(clamp(volume + 0.08, 0, 1))}
         />
 
-        <StackedStepper
+        <InlineStepper
           label="Trail"
           value={`${trailDuration.toFixed(1)}s`}
           color={color}
@@ -152,7 +145,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           onPlus={() => onTrailDurationChange(clamp(trailDuration + 0.35, 0.5, 8))}
         />
 
-        <StackedStepper
+        <InlineStepper
           label="Size"
           value={`${Math.round(glowSize * 100)}%`}
           color={color}
@@ -161,7 +154,6 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         />
       </div>
 
-      {/* COLOR */}
       <div className="space-y-1">
         <label className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
           Color
