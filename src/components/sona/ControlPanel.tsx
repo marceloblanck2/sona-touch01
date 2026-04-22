@@ -1,5 +1,3 @@
-// SØNA Pad v2 - Control Panel Component
-
 import React from 'react';
 import { MappingSelector } from './MappingSelector';
 import { ModeToggle } from './ModeToggle';
@@ -24,70 +22,57 @@ interface ControlPanelProps {
   onGlowSizeChange: (size: number) => void;
 }
 
-const clamp = (value: number, min: number, max: number) =>
-  Math.max(min, Math.min(max, value));
+const clamp = (v: number, min: number, max: number) =>
+  Math.max(min, Math.min(max, v));
 
-interface StepperControlProps {
+interface RowProps {
   label: string;
-  valueText: string;
+  value: string;
   color: HSLColor;
   onMinus: () => void;
   onPlus: () => void;
 }
 
-const StepperControl: React.FC<StepperControlProps> = ({
+const CompactStepper: React.FC<RowProps> = ({
   label,
-  valueText,
+  value,
   color,
   onMinus,
   onPlus,
 }) => {
   return (
-    <div className="space-y-2">
-      <label className="text-xs text-muted-foreground uppercase tracking-wider">
+    <div className="flex items-center justify-between gap-3 py-1.5">
+      <div className="text-[10px] tracking-[0.18em] text-muted-foreground w-10">
         {label}
-      </label>
+      </div>
 
-      <div
-        className="flex items-center gap-3 rounded-xl border px-3 py-3"
+      <button
+        onClick={onMinus}
+        className="h-7 w-7 rounded-md border text-sm active:scale-95"
         style={{
-          borderColor: `hsl(${color.h} ${color.s}% ${color.l}% / 0.22)`,
-          background: 'hsl(220 18% 10% / 0.72)',
-          boxShadow: `inset 0 1px 0 hsl(${color.h} ${color.s}% ${color.l}% / 0.04)`,
+          borderColor: `hsl(${color.h} ${color.s}% ${color.l}% / 0.25)`,
+          color: `hsl(${color.h} ${color.s}% ${color.l}%)`,
+          background: `hsl(${color.h} ${color.s}% ${color.l}% / 0.05)`,
         }}
       >
-        <button
-          type="button"
-          onClick={onMinus}
-          className="h-10 w-10 shrink-0 rounded-lg border text-lg transition active:scale-95"
-          style={{
-            color: `hsl(${color.h} ${color.s}% ${color.l}%)`,
-            borderColor: `hsl(${color.h} ${color.s}% ${color.l}% / 0.28)`,
-            background: `hsl(${color.h} ${color.s}% ${color.l}% / 0.06)`,
-          }}
-          aria-label={`Decrease ${label}`}
-        >
-          −
-        </button>
+        –
+      </button>
 
-        <div className="flex-1 min-w-0">
-          <div className="text-sm text-foreground/90">{valueText}</div>
-        </div>
-
-        <button
-          type="button"
-          onClick={onPlus}
-          className="h-10 w-10 shrink-0 rounded-lg border text-lg transition active:scale-95"
-          style={{
-            color: `hsl(${color.h} ${color.s}% ${color.l}%)`,
-            borderColor: `hsl(${color.h} ${color.s}% ${color.l}% / 0.28)`,
-            background: `hsl(${color.h} ${color.s}% ${color.l}% / 0.06)`,
-          }}
-          aria-label={`Increase ${label}`}
-        >
-          +
-        </button>
+      <div className="text-xs w-12 text-center text-foreground/90">
+        {value}
       </div>
+
+      <button
+        onClick={onPlus}
+        className="h-7 w-7 rounded-md border text-sm active:scale-95"
+        style={{
+          borderColor: `hsl(${color.h} ${color.s}% ${color.l}% / 0.25)`,
+          color: `hsl(${color.h} ${color.s}% ${color.l}%)`,
+          background: `hsl(${color.h} ${color.s}% ${color.l}% / 0.05)`,
+        }}
+      >
+        +
+      </button>
     </div>
   );
 };
@@ -108,25 +93,30 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   onTrailDurationChange,
   onGlowSizeChange,
 }) => {
-  const volumePct = `${Math.round(volume * 100)}%`;
-  const trailText = `${trailDuration.toFixed(1)}s`;
-  const glowText = `${Math.round(glowSize * 100)}%`;
-
   return (
-    <div className="space-y-6">
-      <div className="space-y-2">
-        <label className="text-xs text-muted-foreground uppercase tracking-wider">Mode</label>
+    <div className="space-y-4">
+
+      {/* MODE */}
+      <div className="space-y-1">
+        <label className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+          Mode
+        </label>
         <ModeToggle mode={mode} onChange={onModeChange} color={color} />
       </div>
 
-      <div className="space-y-3">
-        <label className="text-xs text-muted-foreground uppercase tracking-wider">Mapping</label>
+      {/* MAPPING */}
+      <div className="space-y-2">
+        <label className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+          Mapping
+        </label>
+
         <MappingSelector
           axis="X"
           value={mappingX}
           onChange={onMappingXChange}
           color={color}
         />
+
         <MappingSelector
           axis="Y"
           value={mappingY}
@@ -135,34 +125,42 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         />
       </div>
 
-      <div className="space-y-2">
-        <label className="text-xs text-muted-foreground uppercase tracking-wider">Color</label>
+      {/* COLOR */}
+      <div className="space-y-1">
+        <label className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+          Color
+        </label>
         <ColorPicker color={color} onChange={onColorChange} />
       </div>
 
-      <StepperControl
-        label="Volume"
-        valueText={volumePct}
-        color={color}
-        onMinus={() => onVolumeChange(clamp(volume - 0.08, 0, 1))}
-        onPlus={() => onVolumeChange(clamp(volume + 0.08, 0, 1))}
-      />
+      {/* CONTROLS */}
+      <div className="pt-2 border-t border-white/5 space-y-1">
 
-      <StepperControl
-        label="Trail"
-        valueText={trailText}
-        color={color}
-        onMinus={() => onTrailDurationChange(clamp(trailDuration - 0.35, 0.5, 8))}
-        onPlus={() => onTrailDurationChange(clamp(trailDuration + 0.35, 0.5, 8))}
-      />
+        <CompactStepper
+          label="VOL"
+          value={`${Math.round(volume * 100)}%`}
+          color={color}
+          onMinus={() => onVolumeChange(clamp(volume - 0.08, 0, 1))}
+          onPlus={() => onVolumeChange(clamp(volume + 0.08, 0, 1))}
+        />
 
-      <StepperControl
-        label="Size"
-        valueText={glowText}
-        color={color}
-        onMinus={() => onGlowSizeChange(clamp(glowSize - 0.15, 0.3, 3))}
-        onPlus={() => onGlowSizeChange(clamp(glowSize + 0.15, 0.3, 3))}
-      />
+        <CompactStepper
+          label="TRL"
+          value={`${trailDuration.toFixed(1)}s`}
+          color={color}
+          onMinus={() => onTrailDurationChange(clamp(trailDuration - 0.35, 0.5, 8))}
+          onPlus={() => onTrailDurationChange(clamp(trailDuration + 0.35, 0.5, 8))}
+        />
+
+        <CompactStepper
+          label="SIZ"
+          value={`${Math.round(glowSize * 100)}%`}
+          color={color}
+          onMinus={() => onGlowSizeChange(clamp(glowSize - 0.15, 0.3, 3))}
+          onPlus={() => onGlowSizeChange(clamp(glowSize + 0.15, 0.3, 3))}
+        />
+
+      </div>
     </div>
   );
 };
