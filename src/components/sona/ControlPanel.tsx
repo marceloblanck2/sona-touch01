@@ -4,9 +4,6 @@ import React from 'react';
 import { MappingSelector } from './MappingSelector';
 import { ModeToggle } from './ModeToggle';
 import { ColorPicker } from './ColorPicker';
-import { VolumeControl } from './VolumeControl';
-import { TrailControl } from './TrailControl';
-import { SizeControl } from './SizeControl';
 import { MappingOption, GridMode } from '../../utils/constants';
 import { HSLColor } from '../../utils/colorUtils';
 
@@ -32,64 +29,68 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   mappingY,
   mode,
   color,
-  volume,
-  trailDuration,
-  glowSize,
   onMappingXChange,
   onMappingYChange,
   onModeChange,
   onColorChange,
-  onVolumeChange,
-  onTrailDurationChange,
-  onGlowSizeChange,
 }) => {
   return (
-    <div className="space-y-6">
-      {/* Mode Toggle */}
+    <div className="space-y-7">
       <div className="space-y-2">
-        <label className="text-xs text-muted-foreground uppercase tracking-wider">Mode</label>
+        <label className="text-xs text-muted-foreground uppercase tracking-[0.18em]">
+          Mode
+        </label>
         <ModeToggle mode={mode} onChange={onModeChange} color={color} />
       </div>
 
-      {/* XY Mapping */}
       <div className="space-y-3">
-        <label className="text-xs text-muted-foreground uppercase tracking-wider">Mapping</label>
-        <MappingSelector
-          axis="X"
-          value={mappingX}
-          onChange={onMappingXChange}
-          color={color}
-        />
-        <MappingSelector
-          axis="Y"
-          value={mappingY}
-          onChange={onMappingYChange}
-          color={color}
-        />
+        <label className="text-xs text-muted-foreground uppercase tracking-[0.18em]">
+          Mapping
+        </label>
+
+        <div className="space-y-3">
+          <MappingSelector
+            axis="X"
+            value={mappingX}
+            onChange={onMappingXChange}
+            color={color}
+          />
+
+          <MappingSelector
+            axis="Y"
+            value={mappingY}
+            onChange={onMappingYChange}
+            color={color}
+          />
+        </div>
       </div>
 
-      {/* Color Picker */}
       <div className="space-y-2">
-        <label className="text-xs text-muted-foreground uppercase tracking-wider">Color</label>
+        <label className="text-xs text-muted-foreground uppercase tracking-[0.18em]">
+          Color
+        </label>
         <ColorPicker color={color} onChange={onColorChange} />
       </div>
 
-      {/* Volume */}
-      <div className="space-y-2">
-        <label className="text-xs text-muted-foreground uppercase tracking-wider">Volume</label>
-        <VolumeControl volume={volume} onChange={onVolumeChange} color={color} />
-      </div>
+      <div
+        className="rounded-2xl border px-4 py-4"
+        style={{
+          borderColor: `hsl(${color.h} ${color.s}% ${color.l}% / 0.10)`,
+          background: `linear-gradient(
+            180deg,
+            hsl(${color.h} ${color.s}% ${color.l}% / 0.05) 0%,
+            transparent 100%
+          )`,
+        }}
+      >
+        <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground mb-2">
+          Pad Controls
+        </div>
 
-      {/* Trail Duration */}
-      <div className="space-y-2">
-        <label className="text-xs text-muted-foreground uppercase tracking-wider">Trail</label>
-        <TrailControl duration={trailDuration} onChange={onTrailDurationChange} color={color} />
-      </div>
-
-      {/* Glow & Trail Size */}
-      <div className="space-y-2">
-        <label className="text-xs text-muted-foreground uppercase tracking-wider">Size</label>
-        <SizeControl size={glowSize} onChange={onGlowSizeChange} color={color} />
+        <div className="space-y-1 text-sm leading-relaxed text-muted-foreground">
+          <p>Glow, trail e volume agora são ajustados pelos botões no próprio pad.</p>
+          <p>No touch isso fica mais rápido e mais preciso do que sliders.</p>
+        </div>
       </div>
     </div>
   );
