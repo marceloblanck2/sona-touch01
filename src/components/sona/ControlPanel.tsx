@@ -1,3 +1,5 @@
+// SØNA Pad v2 - Control Panel Component
+
 import React from 'react';
 import { MappingSelector } from './MappingSelector';
 import { ModeToggle } from './ModeToggle';
@@ -25,7 +27,7 @@ interface ControlPanelProps {
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
 
-interface StepperProps {
+interface StepperControlProps {
   label: string;
   valueText: string;
   color: HSLColor;
@@ -33,7 +35,7 @@ interface StepperProps {
   onPlus: () => void;
 }
 
-const StepperControl: React.FC<StepperProps> = ({
+const StepperControl: React.FC<StepperControlProps> = ({
   label,
   valueText,
   color,
@@ -50,7 +52,7 @@ const StepperControl: React.FC<StepperProps> = ({
         className="flex items-center gap-3 rounded-xl border px-3 py-3"
         style={{
           borderColor: `hsl(${color.h} ${color.s}% ${color.l}% / 0.22)`,
-          background: `hsl(220 18% 10% / 0.72)`,
+          background: 'hsl(220 18% 10% / 0.72)',
           boxShadow: `inset 0 1px 0 hsl(${color.h} ${color.s}% ${color.l}% / 0.04)`,
         }}
       >
