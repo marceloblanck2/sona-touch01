@@ -22,6 +22,11 @@ interface XYPadProps {
   onTouchEnd: (id: number) => void;
   onInteractionStart: () => void;
   isFullscreen?: boolean;
+
+  // opcionais: para os botões + e -
+  onAdjustGlow?: (delta: number) => void;
+  onAdjustTrail?: (delta: number) => void;
+  onAdjustVolume?: (delta: number) => void;
 }
 
 interface GestureColorState {
@@ -62,11 +67,11 @@ const mapRange = (
 
 const MAX_TRAIL_STEPS_PER_FRAME = 9;
 const GLOW_ATTACK_BOOST = 1.8;
-const GLOW_ATTACK_DURATION_MS = 400;
-const GLOW_MOVE_BOOST_MAX = 0.99;
+const GLOW_ATTACK_DURATION_MS = 320;
+const GLOW_MOVE_BOOST_MAX = 1.0;
 const GLOW_MOVE_SPEED_SCALE = 4.2;
-const GLOW_IDLE_SHRINK_AFTER_MS = 80;
-const GLOW_IDLE_SHRINK_DURATION_MS = 400;
+const GLOW_IDLE_SHRINK_AFTER_MS = 70;
+const GLOW_IDLE_SHRINK_DURATION_MS = 260;
 
 export const XYPad: React.FC<XYPadProps> = ({
   gridMode,
@@ -79,6 +84,9 @@ export const XYPad: React.FC<XYPadProps> = ({
   onTouchEnd,
   onInteractionStart,
   isFullscreen = false,
+  onAdjustGlow,
+  onAdjustTrail,
+  onAdjustVolume,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -94,15 +102,15 @@ export const XYPad: React.FC<XYPadProps> = ({
   const touchVisualsRef = useRef<Map<number, TouchVisualState>>(new Map());
 
   const [gestureColor, setGestureColor] = useState<GestureColorState>({
-    hue: 0,
-    saturation: 40,
-    lightness: 70,
+    hue: 220,
+    saturation: 50,
+    lightness: 58,
   });
 
   const gestureColorRef = useRef<GestureColorState>({
-    hue: 0,
-    saturation: 40,
-    lightness: 70,
+    hue: 220,
+    saturation: 50,
+    lightness: 58,
   });
 
   const lastPositionRef = useRef<{ x: number; y: number } | null>(null);
@@ -168,14 +176,13 @@ export const XYPad: React.FC<XYPadProps> = ({
   const getFallbackVisualColor = useCallback((x: number, y: number, speed: number): GestureColorState => {
     const normalizedSpeed = clamp(speed * 8, 0, 1);
 
-    // Esquerda = mais grave/quente | Direita = mais agudo/frio
-    const hue = mapRange(x, 0, 1, 18, 235);
+    // Esquerda = azul/frio | Direita = vermelho/quente
+    // Sem repetir vermelho nas duas pontas
+    const hue = mapRange(x, 0, 1, 220, 0);
 
-    // Mais movimento e regiões mais altas deixam a cor mais viva
-    const saturation = clamp(mapRange(y, 1, 0, 72, 92) + normalizedSpeed * 8, 65, 98);
-
-    // Embaixo mais denso/escuro, em cima mais aberto/brilhante
-    const lightness = clamp(mapRange(y, 1, 0, 42, 66) + normalizedSpeed * 4, 36, 72);
+    // Embaixo mais denso/escuro, em cima mais vivo/claro
+    const saturation = clamp(mapRange(y, 1, 0, 68, 96) + normalizedSpeed * 6, 60, 98);
+    const lightness = clamp(mapRange(y, 1, 0, 26, 72) + normalizedSpeed * 4, 22, 78);
 
     return { hue, saturation, lightness };
   }, []);
@@ -405,7 +412,7 @@ export const XYPad: React.FC<XYPadProps> = ({
     try {
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
     } catch (err) {
-      // Pointer capture may fail in some cases
+      // ignore
     }
   }, [
     ensureAudioReady,
@@ -464,7 +471,7 @@ export const XYPad: React.FC<XYPadProps> = ({
     try {
       (e.target as HTMLElement).releasePointerCapture(e.pointerId);
     } catch (err) {
-      // May fail if already released
+      // ignore
     }
   }, [onTouchEnd]);
 
@@ -524,7 +531,6 @@ export const XYPad: React.FC<XYPadProps> = ({
       const timeSinceMoveMs = visual ? now - visual.lastMoveAt : 0;
       const lastSpeed = visual?.lastSpeed ?? 0;
 
-      const pulse = Math.sin(now / 220 + point.id * 0.7) * 0.04;
       const attackBoost = clamp(1 - ageMs / GLOW_ATTACK_DURATION_MS, 0, 1) * GLOW_ATTACK_BOOST;
       const movementBoost = Math.min(lastSpeed * GLOW_MOVE_SPEED_SCALE, GLOW_MOVE_BOOST_MAX);
       const idleShrink =
@@ -533,14 +539,15 @@ export const XYPad: React.FC<XYPadProps> = ({
           : clamp(
               (timeSinceMoveMs - GLOW_IDLE_SHRINK_AFTER_MS) / GLOW_IDLE_SHRINK_DURATION_MS,
               0,
-              0.18
+              0.42
             );
 
-      const scale = Math.max(0.68, 1 + attackBoost + movementBoost - idleShrink);
-      const size = glowSize * 64 * scale;
+      const freqBias = mapRange(point.x, 0, 1, 1.12, 0.88);
+      const scale = Math.max(0.66, 1 + attackBoost + movementBoost - idleShrink);
+      const size = glowSize * 62 * scale * freqBias;
       const coreSize = size * 0.34;
-      const glowAlpha = clamp(0.30 + attackBoost * 0.34 + movementBoost * 0.28, 0.28, 0.82);
-const shadowAlpha = clamp(0.32 + attackBoost * 0.38 + movementBoost * 0.32, 0.30, 0.95);
+      const glowAlpha = clamp(0.30 + attackBoost * 0.34 + movementBoost * 0.28, 0.28, 0.84);
+      const shadowAlpha = clamp(0.32 + attackBoost * 0.38 + movementBoost * 0.32, 0.30, 0.96);
 
       return (
         <div
@@ -585,6 +592,48 @@ const shadowAlpha = clamp(0.32 + attackBoost * 0.38 + movementBoost * 0.32, 0.30
     });
   };
 
+  const renderStepper = (
+    label: string,
+    onMinus?: (() => void),
+    onPlus?: (() => void)
+  ) => {
+    if (!onMinus || !onPlus) return null;
+
+    return (
+      <div className="flex items-center gap-2 rounded-2xl bg-black/30 backdrop-blur-md px-2 py-2 shadow-lg">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onMinus();
+          }}
+          className="h-12 w-12 rounded-xl bg-white/12 text-white text-2xl leading-none active:scale-95"
+          style={{ touchAction: 'manipulation' }}
+          aria-label={`${label} minus`}
+        >
+          -
+        </button>
+
+        <div className="min-w-[58px] text-center text-[10px] uppercase tracking-[0.18em] text-white/80">
+          {label}
+        </div>
+
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onPlus();
+          }}
+          className="h-12 w-12 rounded-xl bg-white/12 text-white text-2xl leading-none active:scale-95"
+          style={{ touchAction: 'manipulation' }}
+          aria-label={`${label} plus`}
+        >
+          +
+        </button>
+      </div>
+    );
+  };
+
   const bgHue = isActive ? gestureColor.hue : color.h;
   const bgSat = isActive ? gestureColor.saturation : color.s;
   const bgLight = isActive ? gestureColor.lightness : color.l;
@@ -597,7 +646,7 @@ const shadowAlpha = clamp(0.32 + attackBoost * 0.38 + movementBoost * 0.32, 0.30
       }`}
       style={{
         background: `
-          radial-gradient(circle at 50% 50%, hsl(${bgHue} ${bgSat}% ${bgLight}% / 0.3) 0%, transparent 60%),
+          radial-gradient(circle at 50% 50%, hsl(${bgHue} ${bgSat}% ${bgLight}% / 0.30) 0%, transparent 60%),
           linear-gradient(135deg, hsl(220 20% 8%) 0%, hsl(220 18% 12%) 100%)
         `,
         boxShadow: isActive
@@ -616,6 +665,26 @@ const shadowAlpha = clamp(0.32 + attackBoost * 0.38 + movementBoost * 0.32, 0.30
       <TrailCanvas trailDuration={trailDuration} glowSize={glowSize} color={color} />
 
       {renderTouchPoints()}
+
+      <div className="absolute left-3 top-1/2 -translate-y-1/2 z-20 flex flex-col gap-3 pointer-events-auto">
+        {renderStepper(
+          'glow',
+          onAdjustGlow ? () => onAdjustGlow(-1) : undefined,
+          onAdjustGlow ? () => onAdjustGlow(1) : undefined
+        )}
+
+        {renderStepper(
+          'trail',
+          onAdjustTrail ? () => onAdjustTrail(-1) : undefined,
+          onAdjustTrail ? () => onAdjustTrail(1) : undefined
+        )}
+
+        {renderStepper(
+          'vol',
+          onAdjustVolume ? () => onAdjustVolume(-1) : undefined,
+          onAdjustVolume ? () => onAdjustVolume(1) : undefined
+        )}
+      </div>
 
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <div
