@@ -1,3 +1,5 @@
+// SØNA Pad v2 - Control Panel Component
+
 import React from 'react';
 import { MappingSelector } from './MappingSelector';
 import { ModeToggle } from './ModeToggle';
@@ -22,10 +24,10 @@ interface ControlPanelProps {
   onGlowSizeChange: (size: number) => void;
 }
 
-const clamp = (v: number, min: number, max: number) =>
-  Math.max(min, Math.min(max, v));
+const clamp = (value: number, min: number, max: number) =>
+  Math.max(min, Math.min(max, value));
 
-interface RowProps {
+interface CompactStepperProps {
   label: string;
   value: string;
   color: HSLColor;
@@ -33,7 +35,7 @@ interface RowProps {
   onPlus: () => void;
 }
 
-const CompactStepper: React.FC<RowProps> = ({
+const CompactStepper: React.FC<CompactStepperProps> = ({
   label,
   value,
   color,
@@ -41,35 +43,39 @@ const CompactStepper: React.FC<RowProps> = ({
   onPlus,
 }) => {
   return (
-    <div className="flex items-center justify-between gap-3 py-1.5">
-      <div className="text-[10px] tracking-[0.18em] text-muted-foreground w-10">
+    <div className="flex items-center gap-2 py-1.5">
+      <div className="w-10 text-[10px] tracking-[0.18em] text-muted-foreground text-left">
         {label}
       </div>
 
       <button
+        type="button"
         onClick={onMinus}
-        className="h-7 w-7 rounded-md border text-sm active:scale-95"
+        className="h-7 w-7 rounded-md border text-sm leading-none active:scale-95 transition"
         style={{
           borderColor: `hsl(${color.h} ${color.s}% ${color.l}% / 0.25)`,
           color: `hsl(${color.h} ${color.s}% ${color.l}%)`,
           background: `hsl(${color.h} ${color.s}% ${color.l}% / 0.05)`,
         }}
+        aria-label={`Decrease ${label}`}
       >
         –
       </button>
 
-      <div className="text-xs w-12 text-center text-foreground/90">
+      <div className="w-12 text-xs text-left text-foreground/90">
         {value}
       </div>
 
       <button
+        type="button"
         onClick={onPlus}
-        className="h-7 w-7 rounded-md border text-sm active:scale-95"
+        className="h-7 w-7 rounded-md border text-sm leading-none active:scale-95 transition"
         style={{
           borderColor: `hsl(${color.h} ${color.s}% ${color.l}% / 0.25)`,
           color: `hsl(${color.h} ${color.s}% ${color.l}%)`,
           background: `hsl(${color.h} ${color.s}% ${color.l}% / 0.05)`,
         }}
+        aria-label={`Increase ${label}`}
       >
         +
       </button>
@@ -95,8 +101,6 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 }) => {
   return (
     <div className="space-y-4">
-
-      {/* MODE */}
       <div className="space-y-1">
         <label className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
           Mode
@@ -104,7 +108,6 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         <ModeToggle mode={mode} onChange={onModeChange} color={color} />
       </div>
 
-      {/* MAPPING */}
       <div className="space-y-2">
         <label className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
           Mapping
@@ -125,7 +128,6 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         />
       </div>
 
-      {/* COLOR */}
       <div className="space-y-1">
         <label className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
           Color
@@ -133,9 +135,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         <ColorPicker color={color} onChange={onColorChange} />
       </div>
 
-      {/* CONTROLS */}
       <div className="pt-2 border-t border-white/5 space-y-1">
-
         <CompactStepper
           label="VOL"
           value={`${Math.round(volume * 100)}%`}
@@ -159,7 +159,6 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           onMinus={() => onGlowSizeChange(clamp(glowSize - 0.15, 0.3, 3))}
           onPlus={() => onGlowSizeChange(clamp(glowSize + 0.15, 0.3, 3))}
         />
-
       </div>
     </div>
   );
