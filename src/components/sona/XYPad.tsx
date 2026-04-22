@@ -173,33 +173,23 @@ export const XYPad: React.FC<XYPadProps> = ({
     };
   }, [touchPoints.size]);
 
-  const getFallbackVisualColor = useCallback((x: number, y: number, speed: number): GestureColorState => {
-    const normalizedSpeed = clamp(speed * 8, 0, 1);
+ const getFallbackVisualColor = useCallback((x: number, y: number, speed: number): GestureColorState => {
+  const normalizedSpeed = clamp(speed * 8, 0, 1);
 
-    // Esquerda = azul/frio | Direita = vermelho/quente
-    // Sem repetir vermelho nas duas pontas
-    const hue = mapRange(x, 0, 1, 220, 0);
+  // Esquerda = vermelho | direita = violeta/azul
+  // Sem repetir vermelho na ponta direita
+  const hue = mapRange(x, 0, 1, 0, 280);
 
-    // Embaixo mais denso/escuro, em cima mais vivo/claro
-    const saturation = clamp(mapRange(y, 1, 0, 68, 96) + normalizedSpeed * 6, 60, 98);
-    const lightness = clamp(mapRange(y, 1, 0, 26, 72) + normalizedSpeed * 4, 22, 78);
+  // Embaixo escuro, em cima claro
+  const saturation = clamp(mapRange(y, 1, 0, 78, 96) + normalizedSpeed * 4, 70, 98);
+  const lightness = clamp(mapRange(y, 1, 0, 14, 78) + normalizedSpeed * 3, 10, 82);
 
-    return { hue, saturation, lightness };
-  }, []);
+  return { hue, saturation, lightness };
+}, []);
 
-  const getVisualColorForPointer = useCallback((pointerId: number, x: number, y: number, speed: number) => {
-    const audioColor = getVoiceColor ? getVoiceColor(pointerId) : null;
-
-    if (audioColor) {
-      return {
-        hue: audioColor.h,
-        saturation: audioColor.s,
-        lightness: audioColor.l,
-      };
-    }
-
-    return getFallbackVisualColor(x, y, speed);
-  }, [getFallbackVisualColor, getVoiceColor]);
+ const getVisualColorForPointer = useCallback((pointerId: number, x: number, y: number, speed: number) => {
+  return getFallbackVisualColor(x, y, speed);
+}, [getFallbackVisualColor]);
 
   const updateGestureColor = useCallback((x: number, y: number, pointerId?: number) => {
     const prevPos = lastPositionRef.current;
