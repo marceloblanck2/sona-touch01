@@ -61,12 +61,12 @@ const mapRange = (
 };
 
 const MAX_TRAIL_STEPS_PER_FRAME = 8;
-const GLOW_ATTACK_BOOST = 0.75;
-const GLOW_ATTACK_DURATION_MS = 420;
-const GLOW_MOVE_BOOST_MAX = 0.4;
-const GLOW_MOVE_SPEED_SCALE = 2.2;
-const GLOW_IDLE_SHRINK_AFTER_MS = 120;
-const GLOW_IDLE_SHRINK_DURATION_MS = 800;
+const GLOW_ATTACK_BOOST = 1.35;
+const GLOW_ATTACK_DURATION_MS = 380;
+const GLOW_MOVE_BOOST_MAX = 0.95;
+const GLOW_MOVE_SPEED_SCALE = 4.2;
+const GLOW_IDLE_SHRINK_AFTER_MS = 80;
+const GLOW_IDLE_SHRINK_DURATION_MS = 420;
 
 export const XYPad: React.FC<XYPadProps> = ({
   gridMode,
@@ -536,11 +536,11 @@ export const XYPad: React.FC<XYPadProps> = ({
               0.18
             );
 
-      const scale = Math.max(0.88, 1 + attackBoost + movementBoost + pulse - idleShrink);
-      const size = glowSize * 42 * scale;
+      const scale = Math.max(0.68, 1 + attackBoost + movementBoost - idleShrink);
+      const size = glowSize * 64 * scale;
       const coreSize = size * 0.34;
-      const glowAlpha = clamp(0.24 + attackBoost * 0.22 + movementBoost * 0.18, 0.22, 0.58);
-      const shadowAlpha = clamp(0.25 + attackBoost * 0.25 + movementBoost * 0.22, 0.24, 0.72);
+      const glowAlpha = clamp(0.30 + attackBoost * 0.34 + movementBoost * 0.28, 0.28, 0.82);
+const shadowAlpha = clamp(0.32 + attackBoost * 0.38 + movementBoost * 0.32, 0.30, 0.95);
 
       return (
         <div
