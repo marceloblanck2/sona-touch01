@@ -3,6 +3,23 @@
 
 import { MAX_VOICES, RHYTHM } from '../utils/constants';
 
+// Limite efetivo por device. Android tablet/mobile não aguenta bem 10 vozes
+// com o synth vocal completo (17 nodes de áudio por voz).
+// Desktop mantém MAX_VOICES do constants.ts; mobile reduz para 6.
+const isMobileDevice = (): boolean => {
+  if (typeof navigator === 'undefined') return false;
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+    navigator.userAgent
+  );
+};
+
+const EFFECTIVE_MAX_VOICES = isMobileDevice() ? 6 : MAX_VOICES;
+
+// Release mínimo para o fade "rápido" (usado em stealing e cleanup agressivo).
+// Valor anterior 0.01s era curto demais e gerava clicks audíveis.
+// 40ms é o mínimo prático para fade sem clique audível.
+const FAST_RELEASE_MIN = 0.04;
+
 export interface ManagedVoice {
   id: number;
   oscillators: OscillatorNode[];
@@ -25,33 +42,30 @@ export interface ManagedVoice {
   vibratoGain?: GainNode;
   tremoloLFO?: OscillatorNode;
   tremoloGain?: GainNode;
-  intensity: number; // 0-1 for vowel morphing
-  // Synesthetic feedback — derived from actual audio state
-  currentFrequency: number;  // Hz — the frequency being played
-  currentAmplitude: number;  // 0-1 — the current output level
+  intensity: number;
+  currentFrequency: number;
+  currentAmplitude: number;
 }
 
 class VoiceManagerClass {
   private voices: Map<number, ManagedVoice> = new Map();
   private audioContext: AudioContext | null = null;
-  private pendingCleanups: Map<number, number> = new Map(); // Track cleanup timeouts
+  private pendingCleanups: Map<number, number> = new Map();
 
   setAudioContext(ctx: AudioContext | null): void {
     this.audioContext = ctx;
   }
 
   addVoice(voiceId: number, voiceObject: ManagedVoice): void {
-    // If voice already exists, remove it first to prevent duplicates
     if (this.voices.has(voiceId)) {
       this.removeVoice(voiceId);
     }
-    
-    // Enforce maximum voices - release oldest one musically if at limit
-    if (this.voices.size >= MAX_VOICES) {
+
+    // Usa o limite efetivo (mobile: 6, desktop: 10).
+    if (this.voices.size >= EFFECTIVE_MAX_VOICES) {
       this.removeOldestVoice();
     }
-    
-    // Initialize release timers array
+
     voiceObject.releaseTimers = [];
     this.voices.set(voiceId, voiceObject);
   }
@@ -71,14 +85,12 @@ class VoiceManagerClass {
     const voice = this.voices.get(voiceId);
     if (!voice) return;
 
-    // Cancel any pending cleanup for this voice
     const pendingCleanup = this.pendingCleanups.get(voiceId);
     if (pendingCleanup) {
       clearTimeout(pendingCleanup);
       this.pendingCleanups.delete(voiceId);
     }
 
-    // Clear any release timers
     if (voice.releaseTimers) {
       voice.releaseTimers.forEach(timer => clearTimeout(timer));
       voice.releaseTimers = [];
@@ -107,17 +119,20 @@ class VoiceManagerClass {
   }
 
   removeAllVoices(): void {
-    // Cancel all pending cleanups first
     this.pendingCleanups.forEach(timer => clearTimeout(timer));
     this.pendingCleanups.clear();
 
-    // Immediately force disconnect all voices (no fade for STOP)
+    // Em vez de forceDisconnect imediato (que gera clique), usa fade curto.
+    // Só força desconexão se não houver audioContext (edge case).
     this.voices.forEach((voice, id) => {
-      // Clear release timers
       if (voice.releaseTimers) {
         voice.releaseTimers.forEach(timer => clearTimeout(timer));
       }
-      this.forceDisconnect(voice);
+      if (this.audioContext) {
+        this.fadeOutAndCleanup(voice, id, true);
+      } else {
+        this.forceDisconnect(voice);
+      }
     });
     this.voices.clear();
   }
@@ -128,24 +143,22 @@ class VoiceManagerClass {
       return;
     }
 
-    const fadeTime = fast ? 0.01 : RHYTHM.RELEASE;
+    // Mesmo o fade "rápido" tem mínimo de 40ms para evitar clicks audíveis.
+    const fadeTime = fast ? FAST_RELEASE_MIN : RHYTHM.RELEASE;
     const currentTime = this.audioContext.currentTime;
 
     try {
-      // Mark as inactive immediately to prevent updates
       voice.isActive = false;
-      
-      // Quick fade out to avoid clicks
+
       voice.masterGain.gain.cancelScheduledValues(currentTime);
       voice.masterGain.gain.setValueAtTime(voice.masterGain.gain.value, currentTime);
       voice.masterGain.gain.linearRampToValueAtTime(0, currentTime + fadeTime);
 
-      // Schedule disconnect after fade
       const cleanupTimer = window.setTimeout(() => {
         this.forceDisconnect(voice);
         this.pendingCleanups.delete(voiceId);
       }, fadeTime * 1000 + 20);
-      
+
       this.pendingCleanups.set(voiceId, cleanupTimer);
     } catch (e) {
       this.forceDisconnect(voice);
@@ -154,14 +167,12 @@ class VoiceManagerClass {
 
   private forceDisconnect(voice: ManagedVoice): void {
     voice.isActive = false;
-    
-    // Stop and disconnect all oscillators
+
     voice.oscillators.forEach(osc => {
       try { osc.stop(0); } catch (e) {}
       try { osc.disconnect(); } catch (e) {}
     });
 
-    // Stop vibrato and tremolo LFOs
     if (voice.vibratoLFO) {
       try { voice.vibratoLFO.stop(0); } catch (e) {}
       try { voice.vibratoLFO.disconnect(); } catch (e) {}
@@ -171,12 +182,10 @@ class VoiceManagerClass {
       try { voice.tremoloLFO.disconnect(); } catch (e) {}
     }
 
-    // Disconnect all gain nodes
     voice.gains.forEach(g => {
       try { g.disconnect(); } catch (e) {}
     });
 
-    // Disconnect formant filters and gains
     if (voice.formantFilters) {
       voice.formantFilters.forEach(f => {
         try { f.disconnect(); } catch (e) {}
@@ -194,16 +203,14 @@ class VoiceManagerClass {
       try { voice.tremoloGain.disconnect(); } catch (e) {}
     }
 
-    // Disconnect filter, master gain, and panner
     try { voice.filter.disconnect(); } catch (e) {}
-    try { 
+    try {
       voice.masterGain.gain.cancelScheduledValues(0);
       voice.masterGain.gain.value = 0;
-      voice.masterGain.disconnect(); 
+      voice.masterGain.disconnect();
     } catch (e) {}
     try { voice.panner.disconnect(); } catch (e) {}
 
-    // Clear arrays
     voice.oscillators = [];
     voice.gains = [];
     voice.formantFilters = [];
@@ -222,11 +229,14 @@ class VoiceManagerClass {
     return this.voices.has(voiceId);
   }
 
-  // Check if any voices are truly playing
   hasActiveVoices(): boolean {
     return this.voices.size > 0;
   }
+
+  // Exposto pra diagnóstico / DebugOverlay.
+  getEffectiveMaxVoices(): number {
+    return EFFECTIVE_MAX_VOICES;
+  }
 }
 
-// Global singleton instance
 export const VoiceManager = new VoiceManagerClass();
