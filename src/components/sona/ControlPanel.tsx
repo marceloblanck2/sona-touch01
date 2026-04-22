@@ -27,7 +27,7 @@ interface ControlPanelProps {
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
 
-interface CompactStepperProps {
+interface InlineStepperProps {
   label: string;
   value: string;
   color: HSLColor;
@@ -35,7 +35,7 @@ interface CompactStepperProps {
   onPlus: () => void;
 }
 
-const CompactStepper: React.FC<CompactStepperProps> = ({
+const InlineStepper: React.FC<InlineStepperProps> = ({
   label,
   value,
   color,
@@ -43,8 +43,8 @@ const CompactStepper: React.FC<CompactStepperProps> = ({
   onPlus,
 }) => {
   return (
-    <div className="flex items-center gap-2 py-1.5">
-      <div className="w-10 text-[10px] tracking-[0.18em] text-muted-foreground text-left">
+    <div className="flex items-center justify-end gap-2">
+      <div className="w-[54px] text-right text-[10px] tracking-[0.18em] text-muted-foreground">
         {label}
       </div>
 
@@ -113,19 +113,51 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           Mapping
         </label>
 
-        <MappingSelector
-          axis="X"
-          value={mappingX}
-          onChange={onMappingXChange}
-          color={color}
-        />
+        <div className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-3 items-center">
+          <div>
+            <MappingSelector
+              axis="X"
+              value={mappingX}
+              onChange={onMappingXChange}
+              color={color}
+            />
+          </div>
 
-        <MappingSelector
-          axis="Y"
-          value={mappingY}
-          onChange={onMappingYChange}
-          color={color}
-        />
+          <InlineStepper
+            label="VOLUME"
+            value={`${Math.round(volume * 100)}%`}
+            color={color}
+            onMinus={() => onVolumeChange(clamp(volume - 0.08, 0, 1))}
+            onPlus={() => onVolumeChange(clamp(volume + 0.08, 0, 1))}
+          />
+
+          <div>
+            <MappingSelector
+              axis="Y"
+              value={mappingY}
+              onChange={onMappingYChange}
+              color={color}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <InlineStepper
+              label="TRAIL"
+              value={`${trailDuration.toFixed(1)}s`}
+              color={color}
+              onMinus={() => onTrailDurationChange(clamp(trailDuration - 0.35, 0.5, 8))}
+              onPlus={() => onTrailDurationChange(clamp(trailDuration + 0.35, 0.5, 8))}
+            />
+
+            <InlineStepper
+              label="SIZE"
+              value={`${Math.round(glowSize * 100)}%`}
+              color={color}
+              onMinus={() => onGlowSizeChange(clamp(glowSize - 0.15, 0.3, 3))}
+              onPlus={() => onGlowSizeChange(clamp(glowSize + 0.15, 0.3, 3))}
+            />
+          </div>
+        </div>
       </div>
 
       <div className="space-y-1">
@@ -133,32 +165,6 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           Color
         </label>
         <ColorPicker color={color} onChange={onColorChange} />
-      </div>
-
-      <div className="pt-2 border-t border-white/5 space-y-1">
-        <CompactStepper
-          label="VOL"
-          value={`${Math.round(volume * 100)}%`}
-          color={color}
-          onMinus={() => onVolumeChange(clamp(volume - 0.08, 0, 1))}
-          onPlus={() => onVolumeChange(clamp(volume + 0.08, 0, 1))}
-        />
-
-        <CompactStepper
-          label="TRL"
-          value={`${trailDuration.toFixed(1)}s`}
-          color={color}
-          onMinus={() => onTrailDurationChange(clamp(trailDuration - 0.35, 0.5, 8))}
-          onPlus={() => onTrailDurationChange(clamp(trailDuration + 0.35, 0.5, 8))}
-        />
-
-        <CompactStepper
-          label="SIZ"
-          value={`${Math.round(glowSize * 100)}%`}
-          color={color}
-          onMinus={() => onGlowSizeChange(clamp(glowSize - 0.15, 0.3, 3))}
-          onPlus={() => onGlowSizeChange(clamp(glowSize + 0.15, 0.3, 3))}
-        />
       </div>
     </div>
   );
