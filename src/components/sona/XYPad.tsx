@@ -63,6 +63,11 @@ const mapRange = (
   return outMin + normalized * (outMax - outMin);
 };
 
+const remapHueToControlledSpectrum = (hue: number): number => {
+  const normalized = ((hue % 360) + 360) % 360;
+  return mapRange(normalized, 0, 360, 20, 260);
+};
+
 const MAX_TRAIL_STEPS_PER_FRAME = 9;
 const GLOW_ATTACK_BOOST = 1.8;
 const GLOW_ATTACK_DURATION_MS = 320;
@@ -171,16 +176,41 @@ export const XYPad: React.FC<XYPadProps> = ({
   const getFallbackVisualColor = useCallback((x: number, y: number, speed: number): GestureColorState => {
     const normalizedSpeed = clamp(speed * 8, 0, 1);
 
-    const hue = mapRange(x, 0, 1, 0, 280);
-    const saturation = clamp(mapRange(y, 1, 0, 78, 96) + normalizedSpeed * 4, 70, 98);
-    const lightness = clamp(mapRange(y, 1, 0, 14, 78) + normalizedSpeed * 3, 10, 82);
+    const hueBase = mapRange(x, 0, 1, 35, 255);
+    const hueDrift = mapRange(normalizedSpeed, 0, 1, -8, 14);
+    const hue = clamp(hueBase + hueDrift, 20, 260);
+
+    const saturation = clamp(
+      mapRange(y, 1, 0, 62, 94) + normalizedSpeed * 6,
+      55,
+      98
+    );
+
+    const lightness = clamp(
+      mapRange(y, 1, 0, 18, 78) + normalizedSpeed * 4,
+      12,
+      84
+    );
 
     return { hue, saturation, lightness };
   }, []);
 
   const getVisualColorForPointer = useCallback((pointerId: number, x: number, y: number, speed: number) => {
-    return getFallbackVisualColor(x, y, speed);
-  }, [getFallbackVisualColor]);
+    const fallback = getFallbackVisualColor(x, y, speed);
+    const audioColor = getVoiceColor ? getVoiceColor(pointerId) : null;
+
+    if (!audioColor) {
+      return fallback;
+    }
+
+    const controlledHue = remapHueToControlledSpectrum(audioColor.h);
+
+    return {
+      hue: controlledHue,
+      saturation: clamp(audioColor.s * 0.75 + fallback.saturation * 0.25, 40, 98),
+      lightness: clamp(audioColor.l * 0.7 + fallback.lightness * 0.3, 10, 88),
+    };
+  }, [getFallbackVisualColor, getVoiceColor]);
 
   const updateGestureColor = useCallback((x: number, y: number, pointerId?: number) => {
     const prevPos = lastPositionRef.current;
