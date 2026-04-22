@@ -60,13 +60,13 @@ const mapRange = (
   return outMin + normalized * (outMax - outMin);
 };
 
-const MAX_TRAIL_STEPS_PER_FRAME = 8;
-const GLOW_ATTACK_BOOST = 1.35;
-const GLOW_ATTACK_DURATION_MS = 380;
-const GLOW_MOVE_BOOST_MAX = 0.95;
+const MAX_TRAIL_STEPS_PER_FRAME = 9;
+const GLOW_ATTACK_BOOST = 2.0;
+const GLOW_ATTACK_DURATION_MS = 420;
+const GLOW_MOVE_BOOST_MAX = 0.99;
 const GLOW_MOVE_SPEED_SCALE = 4.2;
 const GLOW_IDLE_SHRINK_AFTER_MS = 80;
-const GLOW_IDLE_SHRINK_DURATION_MS = 420;
+const GLOW_IDLE_SHRINK_DURATION_MS = 400;
 
 export const XYPad: React.FC<XYPadProps> = ({
   gridMode,
