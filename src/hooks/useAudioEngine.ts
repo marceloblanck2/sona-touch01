@@ -22,11 +22,17 @@ export function useAudioEngine() {
   const [masterVolume, setMasterVolume] = useState(0.5);
   const [waveformData, setWaveformData] = useState<Float32Array>(new Float32Array(0));
 
-  const animationRef = useRef<number>();
-  const voiceCountRef = useRef<number>();
+  // RAF unificado — antes eram dois loops (voiceCount + waveform) rodando a 60fps
+  // simultaneamente. Agora um único loop atualiza ambos, reduzindo pressão no main thread.
+  const unifiedRafRef = useRef<number | null>(null);
   const activeTouches = useRef<Set<number>>(new Set());
   const audioUnlockNeeded = useRef(true);
   const pendingTouch = useRef<{ id: number; x: number; y: number } | null>(null);
+
+  // Rastreia dedos que iniciaram mas ainda não tiveram createVoice resolvido.
+  // Evita race condition: se o usuário move o dedo antes do createVoice async
+  // completar, o updateVoice tentaria atualizar uma voz que ainda não existe.
+  const pendingVoiceCreations = useRef<Set<number>>(new Set());
 
   const ensureAudioUnlocked = useCallback(() => {
     if (!audioUnlockNeeded.current) return;
@@ -56,14 +62,17 @@ export function useAudioEngine() {
           const { id, x, y } = pendingTouch.current;
           pendingTouch.current = null;
           activeTouches.current.add(id);
+          pendingVoiceCreations.current.add(id);
 
           audioEngine.createVoice(id, x, y)
             .then(() => {
+              pendingVoiceCreations.current.delete(id);
               setActiveVoices(audioEngine.getActiveVoiceCount());
             })
             .catch((e) => {
               console.warn('[initialize] replay touch failed:', e);
               activeTouches.current.delete(id);
+              pendingVoiceCreations.current.delete(id);
             });
         }
       } else {
@@ -82,6 +91,7 @@ export function useAudioEngine() {
 
   const updateGridMode = useCallback((mode: GridMode) => {
     activeTouches.current.clear();
+    pendingVoiceCreations.current.clear();
     audioEngine.setGridMode(mode);
     setGridMode(mode);
     setActiveVoices(0);
@@ -101,6 +111,7 @@ export function useAudioEngine() {
 
   const stopAllSound = useCallback(() => {
     activeTouches.current.clear();
+    pendingVoiceCreations.current.clear();
     audioEngine.stopAllSound();
     setActiveVoices(0);
   }, []);
@@ -124,14 +135,17 @@ export function useAudioEngine() {
       }
 
       activeTouches.current.add(touchId);
+      pendingVoiceCreations.current.add(touchId);
 
       audioEngine.createVoice(touchId, x, y)
         .then(() => {
+          pendingVoiceCreations.current.delete(touchId);
           setActiveVoices(audioEngine.getActiveVoiceCount());
         })
         .catch((e) => {
           console.warn('[handleTouchStart] createVoice error:', e);
           activeTouches.current.delete(touchId);
+          pendingVoiceCreations.current.delete(touchId);
         });
     } catch (e) {
       console.warn('[handleTouchStart] error:', e);
@@ -141,6 +155,10 @@ export function useAudioEngine() {
   const handleTouchMove = useCallback((touchId: number, x: number, y: number) => {
     if (!isInitialized) return;
     if (!activeTouches.current.has(touchId)) return;
+
+    // Se o createVoice ainda não resolveu, ignora o move (voz não existe ainda).
+    // Sem isso, updateVoice chamado com touchId inexistente gera warning no AudioEngine.
+    if (pendingVoiceCreations.current.has(touchId)) return;
 
     audioEngine.updateVoice(touchId, x, y);
   }, [isInitialized]);
@@ -155,44 +173,40 @@ export function useAudioEngine() {
     if (!activeTouches.current.has(touchId)) return;
 
     activeTouches.current.delete(touchId);
+    pendingVoiceCreations.current.delete(touchId);
+
     audioEngine.releaseVoice(touchId);
     setActiveVoices(audioEngine.getActiveVoiceCount());
   }, [isInitialized]);
 
-  useEffect(() => {
-    if (!isInitialized) return;
-
-    const updateVoiceCount = () => {
-      const count = audioEngine.getActiveVoiceCount();
-      if (count !== activeVoices) {
-        setActiveVoices(count);
-      }
-      voiceCountRef.current = requestAnimationFrame(updateVoiceCount);
-    };
-
-    voiceCountRef.current = requestAnimationFrame(updateVoiceCount);
-
-    return () => {
-      if (voiceCountRef.current) {
-        cancelAnimationFrame(voiceCountRef.current);
-      }
-    };
-  }, [isInitialized, activeVoices]);
-
+  // Loop RAF unificado — atualiza voiceCount e waveform no mesmo frame.
+  // Antes: dois RAFs independentes rodando a 60fps cada = dois scheduled callbacks por frame.
   useEffect(() => {
     if (!isInitialized || !isPlaying) return;
 
-    const updateWaveform = () => {
+    let lastVoiceCount = activeVoices;
+
+    const tick = () => {
+      // Voice count — só atualiza estado se mudou (evita re-render desnecessário).
+      const count = audioEngine.getActiveVoiceCount();
+      if (count !== lastVoiceCount) {
+        lastVoiceCount = count;
+        setActiveVoices(count);
+      }
+
+      // Waveform — sempre atualiza (visualização contínua).
       const data = audioEngine.getWaveformData();
       setWaveformData(data);
-      animationRef.current = requestAnimationFrame(updateWaveform);
+
+      unifiedRafRef.current = requestAnimationFrame(tick);
     };
 
-    animationRef.current = requestAnimationFrame(updateWaveform);
+    unifiedRafRef.current = requestAnimationFrame(tick);
 
     return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
+      if (unifiedRafRef.current !== null) {
+        cancelAnimationFrame(unifiedRafRef.current);
+        unifiedRafRef.current = null;
       }
     };
   }, [isInitialized, isPlaying]);
