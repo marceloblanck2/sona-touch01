@@ -30,8 +30,6 @@ interface GestureColorState {
   lightness: number;
 }
 
-// Estado pendente por dedo — coalescido em requestAnimationFrame.
-// Evita inundar o audio thread com eventos de pointermove (que chegam a 200+/s no Android).
 interface PendingMove {
   x: number;
   y: number;
@@ -40,12 +38,35 @@ interface PendingMove {
   hasMoved: boolean;
 }
 
+interface TouchVisualState {
+  bornAt: number;
+  lastMoveAt: number;
+  lastSpeed: number;
+  color: GestureColorState;
+}
+
 const clamp = (value: number, min: number, max: number): number =>
   Math.max(min, Math.min(max, value));
 
-// Limita a quantidade de pontos de trail interpolados por frame.
-// Valor anterior (dist * 60) podia gerar 30+ pontos por evento em movimentos rápidos.
+const mapRange = (
+  value: number,
+  inMin: number,
+  inMax: number,
+  outMin: number,
+  outMax: number
+): number => {
+  if (inMax === inMin) return outMin;
+  const normalized = clamp((value - inMin) / (inMax - inMin), 0, 1);
+  return outMin + normalized * (outMax - outMin);
+};
+
 const MAX_TRAIL_STEPS_PER_FRAME = 8;
+const GLOW_ATTACK_BOOST = 0.75;
+const GLOW_ATTACK_DURATION_MS = 420;
+const GLOW_MOVE_BOOST_MAX = 0.4;
+const GLOW_MOVE_SPEED_SCALE = 2.2;
+const GLOW_IDLE_SHRINK_AFTER_MS = 120;
+const GLOW_IDLE_SHRINK_DURATION_MS = 800;
 
 export const XYPad: React.FC<XYPadProps> = ({
   gridMode,
@@ -61,16 +82,16 @@ export const XYPad: React.FC<XYPadProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Estado visual dos pontos — atualizado via RAF, não a cada pointermove.
   const [touchPoints, setTouchPoints] = useState<Map<number, TouchPoint>>(new Map());
   const [isActive, setIsActive] = useState(false);
+  const [, setAnimationTick] = useState(0);
   const hasInteracted = useRef(false);
   const activePointers = useRef<Set<number>>(new Set());
 
-  // Posição mais recente de cada dedo — gravada imediatamente no evento,
-  // lida no próximo frame. Quebra o acoplamento evento -> render/áudio.
   const pendingMoves = useRef<Map<number, PendingMove>>(new Map());
   const rafId = useRef<number | null>(null);
+  const animationRafId = useRef<number | null>(null);
+  const touchVisualsRef = useRef<Map<number, TouchVisualState>>(new Map());
 
   const [gestureColor, setGestureColor] = useState<GestureColorState>({
     hue: 0,
@@ -120,6 +141,59 @@ export const XYPad: React.FC<XYPadProps> = ({
     };
   }, [ensureAudioReady]);
 
+  useEffect(() => {
+    if (touchPoints.size === 0) {
+      if (animationRafId.current !== null) {
+        cancelAnimationFrame(animationRafId.current);
+        animationRafId.current = null;
+      }
+      return;
+    }
+
+    const tick = () => {
+      setAnimationTick(prev => prev + 1);
+      animationRafId.current = requestAnimationFrame(tick);
+    };
+
+    animationRafId.current = requestAnimationFrame(tick);
+
+    return () => {
+      if (animationRafId.current !== null) {
+        cancelAnimationFrame(animationRafId.current);
+        animationRafId.current = null;
+      }
+    };
+  }, [touchPoints.size]);
+
+  const getFallbackVisualColor = useCallback((x: number, y: number, speed: number): GestureColorState => {
+    const normalizedSpeed = clamp(speed * 8, 0, 1);
+
+    // Esquerda = mais grave/quente | Direita = mais agudo/frio
+    const hue = mapRange(x, 0, 1, 18, 235);
+
+    // Mais movimento e regiões mais altas deixam a cor mais viva
+    const saturation = clamp(mapRange(y, 1, 0, 72, 92) + normalizedSpeed * 8, 65, 98);
+
+    // Embaixo mais denso/escuro, em cima mais aberto/brilhante
+    const lightness = clamp(mapRange(y, 1, 0, 42, 66) + normalizedSpeed * 4, 36, 72);
+
+    return { hue, saturation, lightness };
+  }, []);
+
+  const getVisualColorForPointer = useCallback((pointerId: number, x: number, y: number, speed: number) => {
+    const audioColor = getVoiceColor ? getVoiceColor(pointerId) : null;
+
+    if (audioColor) {
+      return {
+        hue: audioColor.h,
+        saturation: audioColor.s,
+        lightness: audioColor.l,
+      };
+    }
+
+    return getFallbackVisualColor(x, y, speed);
+  }, [getFallbackVisualColor, getVoiceColor]);
+
   const updateGestureColor = useCallback((x: number, y: number, pointerId?: number) => {
     const prevPos = lastPositionRef.current;
 
@@ -131,32 +205,20 @@ export const XYPad: React.FC<XYPadProps> = ({
     }
     lastPositionRef.current = { x, y };
 
-    let hue: number;
-    let lightness: number;
-    let saturation: number;
-
-    const audioColor =
-      pointerId !== undefined && getVoiceColor ? getVoiceColor(pointerId) : null;
-
-    if (audioColor) {
-      hue = audioColor.h;
-      lightness = audioColor.l;
-      saturation = audioColor.s;
-    } else {
-      const normalizedSpeed = clamp(speed * 10, 0, 1);
-      hue = 30 + x * 300;
-      lightness = clamp(40 + y * 60, 40, 100);
-      saturation = clamp(40 + normalizedSpeed * 60, 40, 100);
-    }
+    const baseColor =
+      pointerId !== undefined
+        ? getVisualColorForPointer(pointerId, x, y, speed)
+        : getFallbackVisualColor(x, y, speed);
 
     const next = {
-      hue,
-      lightness,
-      saturation: gestureColorRef.current.saturation * 0.7 + saturation * 0.3,
+      hue: baseColor.hue,
+      lightness: gestureColorRef.current.lightness * 0.72 + baseColor.lightness * 0.28,
+      saturation: gestureColorRef.current.saturation * 0.72 + baseColor.saturation * 0.28,
     };
+
     gestureColorRef.current = next;
     setGestureColor(next);
-  }, [getVoiceColor]);
+  }, [getFallbackVisualColor, getVisualColorForPointer]);
 
   const getNormalizedCoords = useCallback((clientX: number, clientY: number) => {
     if (!containerRef.current) return { x: 0, y: 0 };
@@ -175,21 +237,41 @@ export const XYPad: React.FC<XYPadProps> = ({
     return true;
   }, []);
 
-  // Consumidor único dos eventos de movimento — roda uma vez por frame.
-  // Processa a posição mais recente de cada dedo e descarta as intermediárias.
   const flushPendingMoves = useCallback(() => {
     rafId.current = null;
 
     if (pendingMoves.current.size === 0) return;
 
-    const updates: Array<{ id: number; x: number; y: number; prevX: number; prevY: number }> = [];
+    const updates: Array<{
+      id: number;
+      x: number;
+      y: number;
+      prevX: number;
+      prevY: number;
+      speed: number;
+      color: GestureColorState;
+    }> = [];
     let latestColorPointer: number | null = null;
     let latestX = 0;
     let latestY = 0;
 
     pendingMoves.current.forEach((move, id) => {
       if (move.hasMoved) {
-        updates.push({ id, x: move.x, y: move.y, prevX: move.prevX, prevY: move.prevY });
+        const dx = move.x - move.prevX;
+        const dy = move.y - move.prevY;
+        const speed = Math.sqrt(dx * dx + dy * dy);
+        const colorForPoint = getVisualColorForPointer(id, move.x, move.y, speed);
+
+        updates.push({
+          id,
+          x: move.x,
+          y: move.y,
+          prevX: move.prevX,
+          prevY: move.prevY,
+          speed,
+          color: colorForPoint,
+        });
+
         latestColorPointer = id;
         latestX = move.x;
         latestY = move.y;
@@ -201,7 +283,6 @@ export const XYPad: React.FC<XYPadProps> = ({
 
     if (updates.length === 0) return;
 
-    // Atualiza posições visuais (um único setState para todos os dedos).
     setTouchPoints(prev => {
       const next = new Map(prev);
       updates.forEach(({ id, x, y }) => {
@@ -210,34 +291,39 @@ export const XYPad: React.FC<XYPadProps> = ({
       return next;
     });
 
-    // Cor da UI segue o dedo mais recente.
+    updates.forEach(({ id, speed, color }) => {
+      const visual = touchVisualsRef.current.get(id);
+      if (visual) {
+        visual.lastMoveAt = performance.now();
+        visual.lastSpeed = speed;
+        visual.color = color;
+      }
+    });
+
     if (latestColorPointer !== null) {
       updateGestureColor(latestX, latestY, latestColorPointer);
     }
 
-    // Trails e callback de áudio — um por dedo, no máximo uma vez por frame.
     const trailAdd = (window as any).__sonaTrailAdd;
-    const c = gestureColorRef.current;
 
-    updates.forEach(({ id, x, y, prevX, prevY }) => {
+    updates.forEach(({ id, x, y, prevX, prevY, color }) => {
       if (trailAdd) {
         const dx = x - prevX;
         const dy = y - prevY;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        // Limite duro de pontos de trail por frame por dedo.
         const steps = Math.min(MAX_TRAIL_STEPS_PER_FRAME, Math.max(1, Math.ceil(dist * 30)));
 
         for (let i = 1; i <= steps; i++) {
           const t = i / steps;
           const ix = prevX + dx * t;
           const iy = prevY + dy * t;
-          trailAdd(ix, iy, c.hue, c.saturation, c.lightness);
+          trailAdd(ix, iy, color.hue, color.saturation, color.lightness);
         }
       }
 
       onTouchMove(id, x, y);
     });
-  }, [onTouchMove, updateGestureColor]);
+  }, [getVisualColorForPointer, onTouchMove, updateGestureColor]);
 
   const scheduleFlush = useCallback(() => {
     if (rafId.current === null) {
@@ -245,14 +331,18 @@ export const XYPad: React.FC<XYPadProps> = ({
     }
   }, [flushPendingMoves]);
 
-  // Cleanup do RAF ao desmontar.
   useEffect(() => {
     return () => {
       if (rafId.current !== null) {
         cancelAnimationFrame(rafId.current);
         rafId.current = null;
       }
+      if (animationRafId.current !== null) {
+        cancelAnimationFrame(animationRafId.current);
+        animationRafId.current = null;
+      }
       pendingMoves.current.clear();
+      touchVisualsRef.current.clear();
     };
   }, []);
 
@@ -279,9 +369,17 @@ export const XYPad: React.FC<XYPadProps> = ({
     onInteractionStart();
 
     const { x, y } = getNormalizedCoords(e.clientX, e.clientY);
+    const now = performance.now();
+    const initialColor = getVisualColorForPointer(id, x, y, 0);
 
     activePointers.current.add(id);
     pendingMoves.current.set(id, { x, y, prevX: x, prevY: y, hasMoved: false });
+    touchVisualsRef.current.set(id, {
+      bornAt: now,
+      lastMoveAt: now,
+      lastSpeed: 0,
+      color: initialColor,
+    });
 
     setTouchPoints(prev => {
       const next = new Map(prev);
@@ -292,8 +390,13 @@ export const XYPad: React.FC<XYPadProps> = ({
     updateGestureColor(x, y, id);
 
     if ((window as any).__sonaTrailAdd) {
-      const c = gestureColorRef.current;
-      (window as any).__sonaTrailAdd(x, y, c.hue, c.saturation, c.lightness);
+      (window as any).__sonaTrailAdd(
+        x,
+        y,
+        initialColor.hue,
+        initialColor.saturation,
+        initialColor.lightness
+      );
     }
 
     setIsActive(true);
@@ -307,15 +410,13 @@ export const XYPad: React.FC<XYPadProps> = ({
   }, [
     ensureAudioReady,
     getNormalizedCoords,
+    getVisualColorForPointer,
     onTouchStart,
     onInteractionStart,
     isValidInput,
     updateGestureColor,
   ]);
 
-  // Handler de movimento — grava a posição mais recente e retorna.
-  // NÃO chama onTouchMove, NÃO atualiza trail, NÃO faz setState aqui.
-  // O trabalho pesado é feito em flushPendingMoves no próximo RAF.
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     const id = e.pointerId;
 
@@ -346,6 +447,7 @@ export const XYPad: React.FC<XYPadProps> = ({
 
     activePointers.current.delete(id);
     pendingMoves.current.delete(id);
+    touchVisualsRef.current.delete(id);
 
     setTouchPoints(prev => {
       const next = new Map(prev);
@@ -413,24 +515,72 @@ export const XYPad: React.FC<XYPadProps> = ({
   };
 
   const renderTouchPoints = () => {
+    const now = performance.now();
+
     return Array.from(touchPoints.values()).map(point => {
-      const baseSize = 40 + Math.sin(Date.now() / 500) * 8;
-      const size = baseSize * glowSize;
+      const visual = touchVisualsRef.current.get(point.id);
+      const pointColor = visual?.color ?? gestureColorRef.current;
+      const ageMs = visual ? now - visual.bornAt : 0;
+      const timeSinceMoveMs = visual ? now - visual.lastMoveAt : 0;
+      const lastSpeed = visual?.lastSpeed ?? 0;
+
+      const pulse = Math.sin(now / 220 + point.id * 0.7) * 0.04;
+      const attackBoost = clamp(1 - ageMs / GLOW_ATTACK_DURATION_MS, 0, 1) * GLOW_ATTACK_BOOST;
+      const movementBoost = Math.min(lastSpeed * GLOW_MOVE_SPEED_SCALE, GLOW_MOVE_BOOST_MAX);
+      const idleShrink =
+        timeSinceMoveMs <= GLOW_IDLE_SHRINK_AFTER_MS
+          ? 0
+          : clamp(
+              (timeSinceMoveMs - GLOW_IDLE_SHRINK_AFTER_MS) / GLOW_IDLE_SHRINK_DURATION_MS,
+              0,
+              0.18
+            );
+
+      const scale = Math.max(0.88, 1 + attackBoost + movementBoost + pulse - idleShrink);
+      const size = glowSize * 42 * scale;
+      const coreSize = size * 0.34;
+      const glowAlpha = clamp(0.24 + attackBoost * 0.22 + movementBoost * 0.18, 0.22, 0.58);
+      const shadowAlpha = clamp(0.25 + attackBoost * 0.25 + movementBoost * 0.22, 0.24, 0.72);
 
       return (
         <div
           key={point.id}
-          className="absolute rounded-full pointer-events-none animate-pulse-glow"
+          className="absolute rounded-full pointer-events-none"
           style={{
             left: `${point.x * 100}%`,
             top: `${point.y * 100}%`,
             width: size,
             height: size,
             transform: 'translate(-50%, -50%)',
-            background: `radial-gradient(circle, hsl(${gestureColor.hue} ${gestureColor.saturation}% ${gestureColor.lightness}%) 0%, hsl(${gestureColor.hue} ${gestureColor.saturation}% ${gestureColor.lightness}% / 0.4) 60%, transparent 100%)`,
-            boxShadow: `0 0 20px hsl(${gestureColor.hue} ${gestureColor.saturation}% ${gestureColor.lightness}% / 0.6)`,
+            borderRadius: '999px',
+            background: `radial-gradient(circle,
+              hsl(${pointColor.hue} ${pointColor.saturation}% ${clamp(pointColor.lightness + 14, 35, 88)}%) 0%,
+              hsl(${pointColor.hue} ${pointColor.saturation}% ${pointColor.lightness}% / ${glowAlpha}) 34%,
+              hsl(${pointColor.hue} ${pointColor.saturation}% ${clamp(pointColor.lightness - 4, 24, 72)}% / ${glowAlpha * 0.7}) 58%,
+              transparent 100%)`,
+            boxShadow: `
+              0 0 ${size * 0.55}px hsl(${pointColor.hue} ${pointColor.saturation}% ${pointColor.lightness}% / ${shadowAlpha}),
+              0 0 ${size * 1.1}px hsl(${pointColor.hue} ${pointColor.saturation}% ${pointColor.lightness}% / ${shadowAlpha * 0.35})
+            `,
+            willChange: 'transform, width, height, box-shadow',
           }}
-        />
+        >
+          <div
+            className="absolute rounded-full"
+            style={{
+              left: '50%',
+              top: '50%',
+              width: coreSize,
+              height: coreSize,
+              transform: 'translate(-50%, -50%)',
+              background: `radial-gradient(circle,
+                hsl(${pointColor.hue} ${pointColor.saturation}% ${clamp(pointColor.lightness + 20, 40, 94)}%) 0%,
+                hsl(${pointColor.hue} ${pointColor.saturation}% ${clamp(pointColor.lightness + 8, 34, 84)}% / 0.85) 55%,
+                transparent 100%)`,
+              filter: 'blur(1px)',
+            }}
+          />
+        </div>
       );
     });
   };
