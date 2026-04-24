@@ -52,6 +52,19 @@ export const SonaPad: React.FC = () => {
     getVoiceColor,
   } = useAudioEngine();
 
+useEffect(() => {
+  applySettings({
+    mappingX: 'pan',
+    mappingY: 'frequency',
+    mode: 'flow',
+    color: { h: 210, s: 60, l: 55 },
+  });
+
+  setGlowSize(0.75);
+  setTrailDuration(3);
+  updateVolume(glowToVolume(0.75));
+}, [applySettings, updateVolume]);
+  
   const handleLoadPreset = useCallback((preset: Preset) => {
     applySettings({
       mappingX: preset.mappingX,
