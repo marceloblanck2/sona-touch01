@@ -164,7 +164,7 @@ export const DEFAULT_PRESETS: Preset[] = [
 
 export class PresetManager {
   private presets: Map<string, Preset> = new Map();
-  private storageKey = 'sona-pad-presets';
+  private storageKey = 'sona-pad-presets-v2';
 
   constructor() {
     this.loadFromStorage();
