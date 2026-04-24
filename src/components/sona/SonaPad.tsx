@@ -59,7 +59,13 @@ export const SonaPad: React.FC = () => {
       mode: preset.mode,
       color: preset.color,
     });
-  }, [applySettings]);
+
+    if (preset.behavior) {
+      setGlowSize(preset.behavior.glowSize);
+      setTrailDuration(preset.behavior.trailDuration);
+      updateVolume(glowToVolume(preset.behavior.glowSize));
+    }
+  }, [applySettings, updateVolume]);
 
   const handleAdjustGlow = useCallback((delta: number) => {
     setGlowSize((prev) => {
