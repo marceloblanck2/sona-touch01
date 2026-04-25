@@ -657,14 +657,14 @@ export const XYPad: React.FC<XYPadProps> = ({
 
             <div
               className="mt-2 text-[10px] sm:text-[11px] tracking-[0.35em] uppercase"
-              style={{ opacity: 0.7, color: `hsl(${bgHue} ${bgSat}% ${bgLight}%)` }}
+              style={{ opacity: 0.81, color: `hsl(${bgHue} ${bgSat}% ${bgLight}%)` }}
             >
               imagem sonora
             </div>
 
             <div
               className="mt-2 text-[10px] sm:text-xs tracking-[0.28em] uppercase"
-              style={{ opacity: 0.78, color: `hsl(${bgHue} ${bgSat}% ${bgLight}%)` }}
+              style={{ opacity: 0.81, color: `hsl(${bgHue} ${bgSat}% ${bgLight}%)` }}
             >
               Marcelo Blanck
             </div>
