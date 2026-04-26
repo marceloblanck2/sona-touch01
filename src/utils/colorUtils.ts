@@ -187,17 +187,16 @@ export function applySynthColor(color: HSLColor) {
 // Maps the audible range to the full color wheel
 export function frequencyToHue(freq: number): number {
   // Logarithmic mapping across full tonal range (108–1728 Hz = 4 octaves).
-  // Hue arc: 0° (red) → 300° (magenta), avoiding full-circle wrap.
-  // Low frequencies → warm (red, orange, yellow).
-  // Mid frequencies → neutral (green, cyan).
-  // High frequencies → cool (blue, violet, magenta).
+  // Centered warm at 432 Hz (amber, 40°) — where most playing happens.
+  // Below 432 Hz: amber → red → magenta (warm to dramatic)
+  // Above 432 Hz: amber → yellow → green → cyan (warm to cool)
   const minFreq = BASE_FREQUENCY * 0.25; // 108 Hz
   const maxFreq = BASE_FREQUENCY * 4.0;  // 1728 Hz
   const logMin = Math.log2(minFreq);
   const logMax = Math.log2(maxFreq);
   const logFreq = Math.log2(Math.max(minFreq, Math.min(maxFreq, freq)));
   const norm = (logFreq - logMin) / (logMax - logMin);
-  return norm * 300;
+  return ((norm - 0.5) * 300 + 40 + 360) % 360;
 }
 
 // Convert audio state to a complete HSL color
