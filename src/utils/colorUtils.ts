@@ -186,17 +186,18 @@ export function applySynthColor(color: HSLColor) {
 // Inverse of the colorToAudioParams frequency mapping
 // Maps the audible range to the full color wheel
 export function frequencyToHue(freq: number): number {
-  // Logarithmic mapping across full tonal range (108–1728 Hz = 4 octaves).
-  // Centered warm at 432 Hz (amber, 40°) — where most playing happens.
-  // Below 432 Hz: amber → red → magenta (warm to dramatic)
-  // Above 432 Hz: amber → yellow → green → cyan (warm to cool)
-  const minFreq = BASE_FREQUENCY * 0.25; // 108 Hz
-  const maxFreq = BASE_FREQUENCY * 4.0;  // 1728 Hz
-  const logMin = Math.log2(minFreq);
-  const logMax = Math.log2(maxFreq);
-  const logFreq = Math.log2(Math.max(minFreq, Math.min(maxFreq, freq)));
-  const norm = (logFreq - logMin) / (logMax - logMin);
-  return ((norm - 0.5) * 300 + 40 + 360) % 360;
+  // Wave-to-wave correspondence: sound frequency → light frequency → hue
+  // Sound range: 110 Hz (A1, H1) → 1760 Hz (A5, H16) — 4 harmonic octaves
+  // Light range: 770 THz (red, 770nm) → 430 THz (violet, 380nm)
+  // Same logarithmic position in each spectrum = same perceptual proportion.
+  // Low sound (110 Hz)  → red   (0°)    long wavelength
+  // Mid sound (440 Hz)  → green (135°)  mid wavelength
+  // High sound (1760 Hz)→ violet(270°)  short wavelength
+  const minFreq = 110;   // A1 — fundamental of harmonic series
+  const maxFreq = 1760;  // A5 — 16th harmonic of A1
+  const clamped = Math.max(minFreq, Math.min(maxFreq, freq));
+  const norm = Math.log2(clamped / minFreq) / Math.log2(maxFreq / minFreq);
+  return norm * 270;
 }
 
 // Convert audio state to a complete HSL color
