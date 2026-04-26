@@ -204,10 +204,10 @@ export class AudioEngine {
       return;
     }
 
-    // Pass engine frequency range so TUNING filters out unreachable notes.
-    // rawFreq range: BASE_FREQUENCY * 0.5 → BASE_FREQUENCY * 2.0
-    const minFreq = BASE_FREQUENCY * 0.5;
-    const maxFreq = BASE_FREQUENCY * 2.0;
+    // Expanded range for tonal fields: 4 octaves below and above base (108–1728 Hz)
+    // Chromatic mode uses the standard engine range (216–864 Hz)
+    const minFreq = BASE_FREQUENCY * 0.25;
+    const maxFreq = BASE_FREQUENCY * 4.0;
     this.scaleNotes = buildScaleFrequencies(field.rootMidi, scaleDef, field.octaves, minFreq, maxFreq);
   }
 
@@ -610,7 +610,11 @@ export class AudioEngine {
       switch (param) {
         case 'frequency': {
           const baseFreq = this.synestheticParams.frequency;
-          const rawFreq = baseFreq * (0.5 + value * 1.5);
+          // Tonal field: expand range to 4 octaves (108–1728 Hz) for full scale coverage
+          // Chromatic: standard range (216–864 Hz)
+          const rawFreq = this.scaleNotes.length > 0
+            ? baseFreq * (0.25 + value * 3.75)
+            : baseFreq * (0.5 + value * 1.5);
 
           // Tonal gravity: resolve to field if active, else chromatic
           let freq = rawFreq;
