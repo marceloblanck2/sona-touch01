@@ -40,7 +40,7 @@ export const MUSICAL_PRESETS: TonalField[] = [
     id: 'tonal-a-minor',
     name: 'Lá menor — Melancolia Difusa',
     emotionalCharacter: 'melancolia difusa, introspecção',
-    rootMidi: 45,    // A2 — âncora grave, 4 oitavas chega até A5
+    rootMidi: 57,    // A3 = 216 Hz — alinhado ao range do engine (216–864 Hz)
     octaves: 4,
     scaleKey: 'natural_minor',
     glideTime: 0.04,
@@ -51,7 +51,7 @@ export const MUSICAL_PRESETS: TonalField[] = [
     id: 'tonal-c-major',
     name: 'Dó maior — Clareza Aberta',
     emotionalCharacter: 'clareza, leveza, abertura',
-    rootMidi: 48,    // C3
+    rootMidi: 60,    // C4 = 257 Hz — alinhado ao range do engine
     octaves: 4,
     scaleKey: 'major',
     glideTime: 0.04,
@@ -62,7 +62,7 @@ export const MUSICAL_PRESETS: TonalField[] = [
     id: 'tonal-d-harmonic',
     name: 'Ré menor harmônica — Tensão Ritual',
     emotionalCharacter: 'tensão ritual, dramaticidade, C# como sensível',
-    rootMidi: 50,    // D3
+    rootMidi: 62,    // D4 = 288 Hz — alinhado ao range do engine
     octaves: 4,
     scaleKey: 'harmonic_minor',
     glideTime: 0.05, // slightly slower glide — tensão que resolve devagar
