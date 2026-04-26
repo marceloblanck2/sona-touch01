@@ -64,8 +64,8 @@ const mapRange = (
 };
 
 const remapHueToControlledSpectrum = (hue: number): number => {
-  const normalized = ((hue % 360) + 360) % 360;
-  return mapRange(normalized, 0, 360, 20, 260);
+  // Pass through — hue already mapped by frequencyToHue (wave-to-wave correspondence)
+  return ((hue % 360) + 360) % 360;
 };
 
 const MAX_TRAIL_STEPS_PER_FRAME = 9;
@@ -176,9 +176,9 @@ export const XYPad: React.FC<XYPadProps> = ({
   const getFallbackVisualColor = useCallback((x: number, y: number, speed: number): GestureColorState => {
     const normalizedSpeed = clamp(speed * 8, 0, 1);
 
-    const hueBase = mapRange(x, 0, 1, 35, 255);
-    const hueDrift = mapRange(normalizedSpeed, 0, 1, -8, 14);
-    const hue = clamp(hueBase + hueDrift, 20, 260);
+    const hueBase = mapRange(x, 0, 1, 0, 270);  // wave-to-wave: red→violet
+    const hueDrift = mapRange(normalizedSpeed, 0, 1, -5, 10);
+    const hue = clamp(hueBase + hueDrift, 0, 270);
 
     const saturation = clamp(
       mapRange(y, 1, 0, 62, 94) + normalizedSpeed * 6,
