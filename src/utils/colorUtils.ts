@@ -185,22 +185,35 @@ export function applySynthColor(color: HSLColor) {
 // Convert a frequency (Hz) to a hue (0-360)
 // Inverse of the colorToAudioParams frequency mapping
 // Maps the audible range to the full color wheel
-export function frequencyToHue(freq: number): number {
-  // The forward mapping is: freq = 432 * (1 + hueNorm * (PHI - 1))
-  // So: hueNorm = (freq / 432 - 1) / (PHI - 1)
-  const hueNorm = (freq / BASE_FREQUENCY - 1) / (PHI - 1);
-  // Clamp to 0-1 and convert to degrees
-  const clamped = Math.max(0, Math.min(1, hueNorm));
-  return clamped * 360;
+export function frequencyToHue(
+  freq: number,
+  hueStart = 0,    // default: red
+  hueEnd = 270     // default: violet
+): number {
+  // Relative perceptual mapping: position in field defines color.
+  // hueStart = color at lowest note, hueEnd = color at highest note.
+  // Each preset defines its own color arc — same gesture, different emotional identity.
+  const minFreq = BASE_FREQUENCY * 0.25; // 108 Hz
+  const maxFreq = BASE_FREQUENCY * 4.0;  // 1728 Hz
+  const clamped = Math.max(minFreq, Math.min(maxFreq, freq));
+  const norm = Math.log2(clamped / minFreq) / Math.log2(maxFreq / minFreq);
+  // Interpolate between hueStart and hueEnd (allows reverse arcs e.g. blue→green)
+  return hueStart + norm * (hueEnd - hueStart);
 }
 
 // Convert audio state to a complete HSL color
 // freq: current frequency in Hz
 // amplitude: 0-1 output level → lightness
 // intensity: 0-1 vowel morphing intensity → saturation
-export function audioToColor(freq: number, amplitude: number, intensity: number): HSLColor {
+export function audioToColor(
+  freq: number,
+  amplitude: number,
+  intensity: number,
+  hueStart = 0,
+  hueEnd = 270
+): HSLColor {
   return {
-    h: frequencyToHue(freq),
+    h: frequencyToHue(freq, hueStart, hueEnd),
     s: Math.round(40 + intensity * 60),  // 40-100% saturation
     l: Math.round(35 + amplitude * 50),  // 35-85% lightness
   };
