@@ -7,6 +7,7 @@ import { ControlPanel } from './ControlPanel';
 import { PresetPanel } from './PresetPanel';
 import { VoiceIndicator } from './VoiceIndicator';
 import { Preset } from '../../presets/PresetManager';
+import { TonalFieldSelector } from './TonalFieldSelector';
 import { Maximize2, Minimize2 } from 'lucide-react';
 import { DebugOverlay } from '../DebugOverlay';
 
@@ -50,6 +51,9 @@ export const SonaPad: React.FC = () => {
     applySettings,
     stopAllSound,
     getVoiceColor,
+    tonalField,
+    updateTonalField,
+    hueRange,
   } = useAudioEngine();
 
 useEffect(() => {
@@ -125,6 +129,7 @@ useEffect(() => {
             trailDuration={trailDuration}
             glowSize={glowSize}
             getVoiceColor={getVoiceColor}
+            hueRange={hueRange}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
@@ -214,6 +219,7 @@ useEffect(() => {
                 trailDuration={trailDuration}
                 glowSize={glowSize}
                 getVoiceColor={getVoiceColor}
+                hueRange={hueRange}
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
@@ -283,6 +289,19 @@ useEffect(() => {
                   color,
                 }}
                 onLoadPreset={handleLoadPreset}
+                accentColor={color}
+              />
+            </div>
+
+            <div
+              className="sona-panel p-5"
+              style={{
+                borderColor: `hsl(${color.h} ${color.s}% ${color.l}% / 0.1)`,
+              }}
+            >
+              <TonalFieldSelector
+                currentField={tonalField}
+                onSelect={updateTonalField}
                 accentColor={color}
               />
             </div>
