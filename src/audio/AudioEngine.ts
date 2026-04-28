@@ -12,6 +12,10 @@ import {
 import { SynestheticParams, audioToColor, HSLColor } from '../utils/colorUtils';
 import { VoiceManager, ManagedVoice } from './VoiceManager';
 import { LoopManager } from './LoopManager';
+import { SCALES } from './scales/SCALES';
+import { buildScaleFrequencies, ScaleNote } from './scales/TUNING';
+import { resolveFrequency, applyVelocityModulation } from './scales/GRAVITY';
+import { TonalField, MUSICAL_PRESETS } from './scales/MUSICAL_PRESETS';
 
 // Re-export Voice type for compatibility
 export type Voice = ManagedVoice;
@@ -72,6 +76,10 @@ export class AudioEngine {
   private gridMode: 'grid' | 'flow' = 'grid';
   private isInitialized = false;
   private activePointers: Set<number> = new Set();
+
+  // Tonal field — null = chromatic (no quantization)
+  private tonalField: TonalField | null = null;
+  private scaleNotes: ScaleNote[] = [];
 
   // Initialize audio context — MUST be called synchronously from a user gesture.
   // iOS Safari requires that AudioContext creation, silent unlock, and resume()
@@ -179,6 +187,42 @@ export class AudioEngine {
   // Set XY mappings
   setMappings(mappings: AudioMappings): void {
     this.mappings = mappings;
+  }
+
+  // Set tonal field — null = chromatic/free mode
+  setTonalField(field: TonalField | null): void {
+    this.tonalField = field;
+
+    if (!field || field.scaleKey === 'chromatic') {
+      this.scaleNotes = [];
+      return;
+    }
+
+    const scaleDef = SCALES[field.scaleKey];
+    if (!scaleDef) {
+      this.scaleNotes = [];
+      return;
+    }
+
+    // Expanded range for tonal fields: 4 octaves below and above base (108–1728 Hz)
+    // Chromatic mode uses the standard engine range (216–864 Hz)
+    const minFreq = BASE_FREQUENCY * 0.25;
+    const maxFreq = BASE_FREQUENCY * 4.0;
+    this.scaleNotes = buildScaleFrequencies(field.rootMidi, scaleDef, field.octaves, minFreq, maxFreq);
+  }
+
+  getTonalPresets(): TonalField[] {
+    return MUSICAL_PRESETS;
+  }
+
+  getCurrentTonalField(): TonalField | null {
+    return this.tonalField;
+  }
+
+  // Returns the active hue range [start, end] for color mapping
+  getHueRange(): [number, number] {
+    if (!this.tonalField) return [0, 270]; // default: red → violet
+    return [this.tonalField.hueStart, this.tonalField.hueEnd];
   }
 
   // Set grid/flow mode with audio reset
@@ -570,26 +614,48 @@ export class AudioEngine {
 
     const applyMapping = (param: string, value: number) => {
       switch (param) {
-        case 'frequency':
+        case 'frequency': {
           const baseFreq = this.synestheticParams.frequency;
-          const freqMultiplier = 0.5 + value * 1.5;
-          const freq = baseFreq * freqMultiplier;
 
+          // Tonal field: map X by note index so every note gets equal pad space
+          // and the last note lands exactly at the edge.
+          // Chromatic: standard linear range (216–864 Hz)
+          let rawFreq: number;
+          if (this.scaleNotes.length > 0) {
+            const index = value * (this.scaleNotes.length - 1);
+            const lo = Math.floor(index);
+            const hi = Math.min(lo + 1, this.scaleNotes.length - 1);
+            const t = index - lo;
+            rawFreq = this.scaleNotes[lo].freq + (this.scaleNotes[hi].freq - this.scaleNotes[lo].freq) * t;
+          } else {
+            rawFreq = baseFreq * (0.5 + value * 1.5);
+          }
+
+          // Tonal gravity: resolve to field if active, else chromatic
+          let freq = rawFreq;
+          if (this.scaleNotes.length > 0) {
+            const resolved = resolveFrequency(rawFreq, this.scaleNotes, y);
+            const normVel = Math.min((voice.velocity ?? 0) / 0.5, 1);
+            freq = applyVelocityModulation(rawFreq, resolved, normVel);
+          }
+
+          const glideTime = this.tonalField?.glideTime ?? RHYTHM.FAST;
           voice.currentFrequency = freq;
 
           if (voice.oscillators[0]) {
-            voice.oscillators[0].frequency.setTargetAtTime(freq, this.audioContext!.currentTime, RHYTHM.FAST);
+            voice.oscillators[0].frequency.setTargetAtTime(freq, this.audioContext!.currentTime, glideTime);
           }
           if (voice.oscillators[1]) {
-            voice.oscillators[1].frequency.setTargetAtTime(freq * 1.002, this.audioContext!.currentTime, RHYTHM.FAST);
+            voice.oscillators[1].frequency.setTargetAtTime(freq * 1.002, this.audioContext!.currentTime, glideTime);
           }
           if (voice.oscillators[2]) {
-            voice.oscillators[2].frequency.setTargetAtTime(freq * 0.5, this.audioContext!.currentTime, RHYTHM.FAST);
+            voice.oscillators[2].frequency.setTargetAtTime(freq * 0.5, this.audioContext!.currentTime, glideTime);
           }
           if (voice.oscillators[3]) {
-            voice.oscillators[3].frequency.setTargetAtTime(freq * 0.998, this.audioContext!.currentTime, RHYTHM.FAST);
+            voice.oscillators[3].frequency.setTargetAtTime(freq * 0.998, this.audioContext!.currentTime, glideTime);
           }
           break;
+        }
 
         case 'filter':
           const filterFreq = 300 + value * 6000 * this.synestheticParams.filterBrightness;
@@ -841,7 +907,8 @@ export class AudioEngine {
   getVoiceColor(touchId: number): HSLColor | null {
     const voice = VoiceManager.getVoice(touchId);
     if (!voice || !voice.isActive) return null;
-    return audioToColor(voice.currentFrequency, voice.currentAmplitude, voice.intensity);
+    const [hs, he] = this.getHueRange();
+    return audioToColor(voice.currentFrequency, voice.currentAmplitude, voice.intensity, hs, he);
   }
 
   getAverageColor(): HSLColor | null {
@@ -854,7 +921,8 @@ export class AudioEngine {
     ids.forEach(id => {
       const voice = VoiceManager.getVoice(id);
       if (voice && voice.isActive) {
-        const c = audioToColor(voice.currentFrequency, voice.currentAmplitude, voice.intensity);
+        const [hs2, he2] = this.getHueRange();
+        const c = audioToColor(voice.currentFrequency, voice.currentAmplitude, voice.intensity, hs2, he2);
         hueSum += c.h;
         satSum += c.s;
         lightSum += c.l;
