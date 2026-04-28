@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { audioEngine, AudioMappings } from '../audio/AudioEngine';
+import { TonalField } from '../audio/scales/MUSICAL_PRESETS';
 import { HSLColor, colorToAudioParams, applySynthColor } from '../utils/colorUtils';
 import { MappingOption, GridMode } from '../utils/constants';
 
@@ -21,6 +22,8 @@ export function useAudioEngine() {
   const [color, setColor] = useState<HSLColor>({ h: 38, s: 75, l: 55 });
   const [masterVolume, setMasterVolume] = useState(0.5);
   const [waveformData, setWaveformData] = useState<Float32Array>(new Float32Array(0));
+  const [tonalField, setTonalFieldState] = useState<TonalField | null>(null);
+  const [hueRange, setHueRange] = useState<[number, number]>([0, 270]);
 
   // RAF unificado — antes eram dois loops (voiceCount + waveform) rodando a 60fps
   // simultaneamente. Agora um único loop atualiza ambos, reduzindo pressão no main thread.
@@ -107,6 +110,13 @@ export function useAudioEngine() {
   const updateVolume = useCallback((volume: number) => {
     setMasterVolume(volume);
     audioEngine.setMasterVolume(volume);
+  }, []);
+
+  const updateTonalField = useCallback((field: TonalField | null) => {
+    setTonalFieldState(field);
+    audioEngine.setTonalField(field);
+    const range = field ? [field.hueStart, field.hueEnd] : [0, 270];
+    setHueRange(range as [number, number]);
   }, []);
 
   const stopAllSound = useCallback(() => {
@@ -282,5 +292,8 @@ export function useAudioEngine() {
     stopAllSound,
     getVoiceColor,
     getAverageColor,
+    tonalField,
+    updateTonalField,
+    hueRange,
   };
 }
