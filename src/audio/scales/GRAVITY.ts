@@ -30,7 +30,6 @@ function getRoleWeight(role: NoteRole, y: number): number {
       return 1.0; // neutro
   }
 }
-
 /**
  * Compute gravitational attraction of rawFreq toward a scale note.
  * Higher weight + lower distance = stronger pull.
