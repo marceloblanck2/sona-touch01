@@ -54,6 +54,7 @@ export const SonaPad: React.FC = () => {
     tonalField,
     updateTonalField,
     hueRange,
+    noteMarkers,
   } = useAudioEngine();
 
 useEffect(() => {
@@ -130,6 +131,8 @@ useEffect(() => {
             glowSize={glowSize}
             getVoiceColor={getVoiceColor}
             hueRange={hueRange}
+            noteMarkers={noteMarkers}
+            frequencyAxis={mappings.x === 'frequency' ? 'x' : mappings.y === 'frequency' ? 'y' : 'x'}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
@@ -220,6 +223,8 @@ useEffect(() => {
                 glowSize={glowSize}
                 getVoiceColor={getVoiceColor}
                 hueRange={hueRange}
+                noteMarkers={noteMarkers}
+                frequencyAxis={mappings.x === 'frequency' ? 'x' : mappings.y === 'frequency' ? 'y' : 'x'}
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}

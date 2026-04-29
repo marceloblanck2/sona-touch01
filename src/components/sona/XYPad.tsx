@@ -23,6 +23,8 @@ interface XYPadProps {
   onTouchEnd: (id: number) => void;
   onInteractionStart: () => void;
   isFullscreen?: boolean;
+  noteMarkers?: Array<{ position: number; role: string; weight: number }>;
+  frequencyAxis?: 'x' | 'y';
   onAdjustGlow?: (delta: number) => void;
   onAdjustTrail?: (delta: number) => void;
   onAdjustVolume?: (delta: number) => void;
@@ -89,6 +91,8 @@ export const XYPad: React.FC<XYPadProps> = ({
   onTouchEnd,
   onInteractionStart,
   isFullscreen = false,
+  noteMarkers = [],
+  frequencyAxis = 'x',
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -482,6 +486,73 @@ export const XYPad: React.FC<XYPadProps> = ({
     e.stopPropagation();
   }, []);
 
+  const renderNoteMarkers = () => {
+    if (!noteMarkers || noteMarkers.length === 0) return null;
+
+    return (
+      <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 5 }}>
+        {noteMarkers.map((note, i) => {
+          const pct = note.position * 100;
+
+          // Opacity and size based on role
+          const roleOpacity: Record<string, number> = {
+            anchor: 0.55,
+            color: 0.35,
+            opening: 0.30,
+            tension: 0.45,
+            shadow: 0.22,
+            motion: 0.15,
+            resolution: 0.38,
+          };
+          const opacity = roleOpacity[note.role] ?? 0.2;
+          const r = note.role === 'anchor' ? 3.5 : note.role === 'tension' ? 3 : 2;
+
+          const hue = hueRange[0] + note.position * (hueRange[1] - hueRange[0]);
+
+          if (frequencyAxis === 'x') {
+            return (
+              <g key={i}>
+                <line
+                  x1={`${pct}%`} y1="0"
+                  x2={`${pct}%`} y2="100%"
+                  stroke={`hsl(${hue} 70% 65%)`}
+                  strokeWidth="0.5"
+                  strokeDasharray={note.role === 'anchor' ? 'none' : '3 6'}
+                  opacity={opacity * 0.6}
+                />
+                <circle
+                  cx={`${pct}%`} cy="50%"
+                  r={r}
+                  fill={`hsl(${hue} 80% 70%)`}
+                  opacity={opacity}
+                />
+              </g>
+            );
+          } else {
+            return (
+              <g key={i}>
+                <line
+                  x1="0" y1={`${pct}%`}
+                  x2="100%" y2={`${pct}%`}
+                  stroke={`hsl(${hue} 70% 65%)`}
+                  strokeWidth="0.5"
+                  strokeDasharray={note.role === 'anchor' ? 'none' : '3 6'}
+                  opacity={opacity * 0.6}
+                />
+                <circle
+                  cx="50%" cy={`${pct}%`}
+                  r={r}
+                  fill={`hsl(${hue} 80% 70%)`}
+                  opacity={opacity}
+                />
+              </g>
+            );
+          }
+        })}
+      </svg>
+    );
+  };
+
   const renderGrid = () => {
     if (gridMode !== 'grid') return null;
 
@@ -622,6 +693,7 @@ export const XYPad: React.FC<XYPadProps> = ({
     >
       {renderGrid()}
       <TrailCanvas trailDuration={trailDuration} glowSize={glowSize} color={color} />
+      {renderNoteMarkers()}
       {renderTouchPoints()}
 
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
