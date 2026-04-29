@@ -635,7 +635,9 @@ export class AudioEngine {
           let freq = rawFreq;
           if (this.scaleNotes.length > 0) {
             const resolved = resolveFrequency(rawFreq, this.scaleNotes, y);
-            const normVel = Math.min((voice.velocity ?? 0) / 0.5, 1);
+            // Threshold 2.0 — only very fast gestures release tonal gravity
+            // Below this, field quantization stays active for clear note articulation
+            const normVel = Math.min((voice.velocity ?? 0) / 2.0, 1);
             freq = applyVelocityModulation(rawFreq, resolved, normVel);
           }
 
