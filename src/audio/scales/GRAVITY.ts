@@ -30,6 +30,7 @@ function getRoleWeight(role: NoteRole, y: number): number {
       return 1.0; // neutro
   }
 }
+
 /**
  * Compute gravitational attraction of rawFreq toward a scale note.
  * Higher weight + lower distance = stronger pull.
@@ -42,10 +43,10 @@ function computeAttraction(
 ): number {
   const distance = Math.abs(rawFreq - note.freq);
   const roleWeight = getRoleWeight(note.role, y);
-  // Epsilon proportional to note frequency (5%) — prevents glitching in high octaves
-  // where a fixed 8 Hz epsilon becomes negligible relative to semitone distances
+  // Distance squared — gravity falls off rapidly, each note dominates only its
+  // immediate neighborhood. Prevents anchors from consuming multiple pad regions.
   const epsilon = note.freq * 0.05;
-  return (note.weight * roleWeight) / (distance + epsilon);
+  return (note.weight * roleWeight) / (distance * distance + epsilon * epsilon);
 }
 
 /**
