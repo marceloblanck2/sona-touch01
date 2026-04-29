@@ -24,6 +24,7 @@ export function useAudioEngine() {
   const [waveformData, setWaveformData] = useState<Float32Array>(new Float32Array(0));
   const [tonalField, setTonalFieldState] = useState<TonalField | null>(null);
   const [hueRange, setHueRange] = useState<[number, number]>([0, 270]);
+  const [noteMarkers, setNoteMarkers] = useState<Array<{ position: number; role: string; weight: number }>>([]);
 
   // RAF unificado — antes eram dois loops (voiceCount + waveform) rodando a 60fps
   // simultaneamente. Agora um único loop atualiza ambos, reduzindo pressão no main thread.
@@ -117,6 +118,7 @@ export function useAudioEngine() {
     audioEngine.setTonalField(field);
     const range = field ? [field.hueStart, field.hueEnd] : [0, 270];
     setHueRange(range as [number, number]);
+    setNoteMarkers(audioEngine.getNoteMarkers());
   }, []);
 
   const stopAllSound = useCallback(() => {
@@ -295,5 +297,6 @@ export function useAudioEngine() {
     tonalField,
     updateTonalField,
     hueRange,
+    noteMarkers,
   };
 }
