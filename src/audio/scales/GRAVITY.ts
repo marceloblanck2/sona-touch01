@@ -43,7 +43,9 @@ function computeAttraction(
 ): number {
   const distance = Math.abs(rawFreq - note.freq);
   const roleWeight = getRoleWeight(note.role, y);
-  const epsilon = 8; // Hz — avoids hard snap at exact note
+  // Epsilon proportional to note frequency (5%) — prevents glitching in high octaves
+  // where a fixed 8 Hz epsilon becomes negligible relative to semitone distances
+  const epsilon = note.freq * 0.05;
   return (note.weight * roleWeight) / (distance + epsilon);
 }
 
