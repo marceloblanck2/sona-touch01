@@ -225,6 +225,17 @@ export class AudioEngine {
     return [this.tonalField.hueStart, this.tonalField.hueEnd];
   }
 
+// Returns note positions normalized 0-1 for visual markers on the pad
+getNoteMarkers(): Array<{ position: number; role: string; weight: number }> {
+  if (this.scaleNotes.length === 0) return [];
+  const total = this.scaleNotes.length - 1;
+  return this.scaleNotes.map((note, i) => ({
+    position: total > 0 ? i / total : 0,
+    role: note.role,
+    weight: note.weight,
+  }));
+}
+  
   // Set grid/flow mode with audio reset
   setGridMode(mode: 'grid' | 'flow'): void {
     this.stopAllSound();
