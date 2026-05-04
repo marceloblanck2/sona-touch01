@@ -32,7 +32,12 @@ export function useAudioEngine() {
 const [resolvedStates, setResolvedStates] = useState<Map<number, ResolvedState>>(new Map());
 
 useEffect(() => {
+  console.log('[DEBUG] imported audioEngine:', audioEngine);
+
   (window as any).audioEngine = audioEngine;
+  (globalThis as any).audioEngine = audioEngine;
+
+  console.log('[DEBUG] window.audioEngine:', (window as any).audioEngine);
 }, []);
 
 const unifiedRafRef = useRef<number | null>(null);
