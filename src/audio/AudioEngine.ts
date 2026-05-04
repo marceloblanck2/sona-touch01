@@ -1,5 +1,6 @@
 // SØNA Touch 01 - Core Audio Engine
 // 432 Hz base, vocal synthesis with formants, per-voice control
+// ResolvedState integration: single source of truth per touch.
 
 import {
   PHI,
@@ -14,11 +15,17 @@ import { VoiceManager, ManagedVoice } from './VoiceManager';
 import { LoopManager } from './LoopManager';
 import { SCALES } from './scales/SCALES';
 import { buildScaleFrequencies, ScaleNote } from './scales/TUNING';
-import { resolveFrequency, applyVelocityModulation } from './scales/GRAVITY';
+import { resolveNote, applyVelocityModulation } from './scales/GRAVITY';
 import { TonalField, MUSICAL_PRESETS } from './scales/MUSICAL_PRESETS';
+import {
+  ResolvedState,
+  buildResolvedState,
+  RESTING,
+} from './scales/RESOLVED_STATE';
 
-// Re-export Voice type for compatibility
+// Re-export types for compatibility
 export type Voice = ManagedVoice;
+export type { ResolvedState };
 
 export interface AudioMappings {
   x: 'none' | 'frequency' | 'filter' | 'harmonics' | 'amplitude' | 'pan';
@@ -26,33 +33,19 @@ export interface AudioMappings {
 }
 
 // Formant frequencies for vowel sounds (Hz)
-// Each vowel has 3 formants [F1, F2, F3]
-// Refined for smoother, more organic, less nasal/metallic sound
 const VOWEL_FORMANTS = {
-  // Dark vowels (low intensity) - warmer, rounder
   O: { f: [380, 750, 2400], q: [6, 5, 4], gain: [1, 0.35, 0.15] },
   U: { f: [320, 680, 2300], q: [7, 5, 4], gain: [1, 0.3, 0.12] },
-  // Neutral vowel (medium intensity) - balanced, smooth
   A: { f: [650, 1100, 2450], q: [5, 4, 3.5], gain: [1, 0.45, 0.2] },
-  // Bright vowels (high intensity) - open but not piercing
   E: { f: [480, 1600, 2400], q: [5, 4, 3], gain: [1, 0.5, 0.22] },
   I: { f: [350, 1900, 2600], q: [5.5, 4, 3], gain: [1, 0.55, 0.25] },
 };
 
-// Limites de ganho de formante (em dB). Valor anterior (+4 a +10dB em cada filtro)
-// somava até +30dB em frequências ressonantes e saturava com múltiplas vozes.
-// Novo range: +2 a +6dB por filtro, máximo +18dB somado, muito menos clipping.
 const FORMANT_GAIN_BASE_DB = 2;
 const FORMANT_GAIN_RANGE_DB = 4;
-
-// Ganho do "mix de voz" que entra no master. Compensa a presença de múltiplas vozes
-// simultâneas (cada toque adiciona energia ao master). Valor anterior (0.25) não
-// escalava, saturando o master com 3+ dedos.
 const VOICE_PEAK_GAIN = 0.22;
 
-// Easing function for smooth intensity morphing
 const easeIntensity = (t: number): number => {
-  // Soft S-curve: slow start, smooth middle, gentle top
   return t < 0.5
     ? 2 * t * t
     : 1 - Math.pow(-2 * t + 2, 2) / 2;
@@ -61,9 +54,6 @@ const easeIntensity = (t: number): number => {
 export class AudioEngine {
   private audioContext: AudioContext | null = null;
   private masterGain: GainNode | null = null;
-  // Compressor atuando como limiter final — rede de segurança contra clipping quando
-  // várias vozes somam energia em picos. Sem isso, o navegador faz hard-clipping
-  // (crepitação seca audível com 3+ dedos no Android).
   private masterLimiter: DynamicsCompressorNode | null = null;
   private analyser: AnalyserNode | null = null;
   private synestheticParams: SynestheticParams = {
@@ -77,17 +67,16 @@ export class AudioEngine {
   private isInitialized = false;
   private activePointers: Set<number> = new Set();
 
-  // Tonal field — null = chromatic (no quantization)
+  // Tonal field
   private tonalField: TonalField | null = null;
   private scaleNotes: ScaleNote[] = [];
 
-  // Initialize audio context — MUST be called synchronously from a user gesture.
-  // iOS Safari requires that AudioContext creation, silent unlock, and resume()
-  // happen within the same synchronous call stack as the user gesture handler.
-  // Any await before these calls consumes the gesture token and silently fails.
+  // ResolvedState — single source of truth per touch
+  private resolvedStates: Map<number, ResolvedState> = new Map();
+  private lastMoveTimestamps: Map<number, number> = new Map();
+
   initialize(): void {
     if (this.isInitialized) {
-      // Even if already initialized, try to resume again for Safari/iOS
       if (
         this.audioContext &&
         (this.audioContext.state === 'suspended' ||
@@ -108,22 +97,16 @@ export class AudioEngine {
       return;
     }
 
-    // Must happen synchronously inside the user gesture
     this.audioContext = new AudioContextClass();
 
-    // iPhone/Safari hard unlock
     try {
       const osc = this.audioContext.createOscillator();
       const gain = this.audioContext.createGain();
-
       gain.gain.value = 0;
-
       osc.connect(gain);
       gain.connect(this.audioContext.destination);
-
       osc.start();
       osc.stop(this.audioContext.currentTime + 0.01);
-
       console.log('[AudioEngine] silent unlock fired');
     } catch (e) {
       console.warn('[AudioEngine] silent unlock failed:', String(e));
@@ -134,9 +117,6 @@ export class AudioEngine {
     this.masterGain = this.audioContext.createGain();
     this.masterGain.gain.setValueAtTime(0.5, this.audioContext.currentTime);
 
-    // Master limiter — evita clipping quando várias vozes somam picos.
-    // Threshold -6dB, ratio 20:1 age como limiter de segurança.
-    // Attack rápido e release suave pra não "bombeiar" audivelmente.
     this.masterLimiter = this.audioContext.createDynamicsCompressor();
     this.masterLimiter.threshold.setValueAtTime(-6, this.audioContext.currentTime);
     this.masterLimiter.knee.setValueAtTime(6, this.audioContext.currentTime);
@@ -148,7 +128,6 @@ export class AudioEngine {
     this.analyser.fftSize = 2048;
     this.analyser.smoothingTimeConstant = 0.8;
 
-    // Signal chain: masterGain → limiter → analyser → destination
     this.masterGain.connect(this.masterLimiter);
     this.masterLimiter.connect(this.analyser);
     this.analyser.connect(this.audioContext.destination);
@@ -165,17 +144,12 @@ export class AudioEngine {
     this.isInitialized = true;
   }
 
-
-  // Get analyzer for visualization
   getAnalyser(): AnalyserNode | null {
     return this.analyser;
   }
 
-  // Set synesthetic color parameters
   setSynestheticParams(params: SynestheticParams): void {
     this.synestheticParams = params;
-
-    // Update all active voices
     VoiceManager.getAllVoiceIds().forEach(id => {
       const voice = VoiceManager.getVoice(id);
       if (voice && voice.isActive) {
@@ -184,14 +158,16 @@ export class AudioEngine {
     });
   }
 
-  // Set XY mappings
   setMappings(mappings: AudioMappings): void {
     this.mappings = mappings;
   }
 
-  // Set tonal field — null = chromatic/free mode
   setTonalField(field: TonalField | null): void {
     this.tonalField = field;
+
+    // Tonal field changed: previous resolved notes/colors are no longer valid.
+    this.resolvedStates.clear();
+    this.lastMoveTimestamps.clear();
 
     if (!field || field.scaleKey === 'chromatic') {
       this.scaleNotes = [];
@@ -204,8 +180,6 @@ export class AudioEngine {
       return;
     }
 
-    // Expanded range for tonal fields: 4 octaves below and above base (108–1728 Hz)
-    // Chromatic mode uses the standard engine range (216–864 Hz)
     const minFreq = BASE_FREQUENCY * 0.25;
     const maxFreq = BASE_FREQUENCY * 4.0;
     this.scaleNotes = buildScaleFrequencies(field.rootMidi, scaleDef, field.octaves, minFreq, maxFreq);
@@ -219,13 +193,143 @@ export class AudioEngine {
     return this.tonalField;
   }
 
-  // Set grid/flow mode with audio reset
+  getHueRange(): [number, number] {
+    if (!this.tonalField) return [0, 270];
+    return [this.tonalField.hueStart, this.tonalField.hueEnd];
+  }
+
+  getNoteMarkers(): Array<{ position: number; role: string; weight: number }> {
+    if (this.scaleNotes.length === 0) return [];
+    const total = this.scaleNotes.length - 1;
+    return this.scaleNotes.map((note, i) => ({
+      position: total > 0 ? i / total : 0,
+      role: note.role,
+      weight: note.weight,
+    }));
+  }
+
+  // ============================================================================
+  // RESOLVED STATE — single source of truth per touch
+  // ============================================================================
+
+  /**
+   * Get current ResolvedState for a specific touch.
+   */
+  getResolvedState(touchId: number): ResolvedState | null {
+    return this.resolvedStates.get(touchId) ?? null;
+  }
+
+  /**
+   * Get a snapshot of all current ResolvedStates.
+   */
+  getAllResolvedStates(): Map<number, ResolvedState> {
+    return new Map(this.resolvedStates);
+  }
+
+  /**
+   * Compute and store ResolvedState for a touch.
+   * Called from createVoice and updateVoice — keeps state in sync with audio.
+   * Returns null if no tonal field is active (chromatic mode has no resolved note).
+   */
+  private updateResolvedState(
+    touchId: number,
+    x: number,
+    y: number,
+    velocity: number
+  ): ResolvedState | null {
+    if (this.scaleNotes.length === 0 || !this.tonalField) {
+      // Chromatic mode — no resolved state for now
+      this.resolvedStates.delete(touchId);
+      return null;
+    }
+
+    // 1. Compute raw frequency from X position via note index
+    //    (matches updateVoiceFromXY frequency mapping)
+    const value = x; // X is the pad axis where frequency lives by default
+    const index = value * (this.scaleNotes.length - 1);
+    const lo = Math.floor(index);
+    const hi = Math.min(lo + 1, this.scaleNotes.length - 1);
+    const t = index - lo;
+    const rawFreq = this.scaleNotes[lo].freq + (this.scaleNotes[hi].freq - this.scaleNotes[lo].freq) * t;
+
+    // 2. Resolve via gravity
+    const resolved = resolveNote(rawFreq, this.scaleNotes, y);
+    if (!resolved) {
+      this.resolvedStates.delete(touchId);
+      return null;
+    }
+
+    // 3. Compute resting duration
+    // Velocity arrives from pad-space delta/time and can exceed 1. Normalize it
+    // before sending it to ResolvedState and before using the resting threshold.
+    const normalizedVelocity = Math.min(Math.max(velocity / 2.0, 0), 1);
+
+    const now = performance.now();
+    const lastMove = this.lastMoveTimestamps.get(touchId);
+    const previousState = this.resolvedStates.get(touchId);
+    const noteChanged = previousState ? previousState.midi !== resolved.midi : true;
+
+    let restingDuration = 0;
+
+    // Reset resting when:
+    // - the touch is new;
+    // - the gesture is moving;
+    // - gravity resolves to a different note.
+    // Without noteChanged here, glow/scale could keep accumulating after a note jump.
+    if (lastMove === undefined || normalizedVelocity > RESTING.velocityThreshold || noteChanged) {
+      this.lastMoveTimestamps.set(touchId, now);
+      restingDuration = 0;
+    } else {
+      restingDuration = now - lastMove;
+    }
+
+    // 4. Compute scaleDegreeNormalized (position of resolved note within field)
+    const noteIndex = this.scaleNotes.indexOf(resolved);
+    const totalSpan = Math.max(this.scaleNotes.length - 1, 1);
+    const scaleDegreeNormalized = noteIndex / totalSpan;
+
+    // 5. yEnergy: Y baixo = energia alta (Y=0 top, Y=1 bottom in pad coords)
+    const yEnergy = 1 - y;
+
+    // 6. Build ResolvedState
+    const state = buildResolvedState({
+      note: resolved,
+      velocity: normalizedVelocity,
+      yEnergy,
+      restingDuration,
+      scaleDegreeNormalized,
+      hueStart: this.tonalField.hueStart,
+      hueEnd: this.tonalField.hueEnd,
+    });
+
+    this.resolvedStates.set(touchId, state);
+    return state;
+  }
+
+  /**
+   * Refresh dynamic ResolvedState values while touches are held still.
+   * Pointer events do not fire when a finger stops moving, but restingDuration,
+   * glow, scale and saturation still need to evolve. Called from the hook RAF.
+   */
+  refreshResolvedStates(): void {
+    if (this.scaleNotes.length === 0 || !this.tonalField) return;
+
+    VoiceManager.getAllVoiceIds().forEach((id) => {
+      const voice = VoiceManager.getVoice(id);
+      if (voice && voice.isActive) {
+        // velocity 0 means: no new movement this frame, allow restingDuration to grow.
+        this.updateResolvedState(id, voice.x, voice.y, 0);
+      }
+    });
+  }
+
+  // ============================================================================
+
   setGridMode(mode: 'grid' | 'flow'): void {
     this.stopAllSound();
     this.gridMode = mode;
   }
 
-  // Interpolate between two vowel formant sets
   private interpolateFormants(
     vowel1: typeof VOWEL_FORMANTS.A,
     vowel2: typeof VOWEL_FORMANTS.A,
@@ -238,36 +342,28 @@ export class AudioEngine {
     };
   }
 
-  // Get formant settings based on intensity (0-1) with smooth easing
   private getVowelFormants(intensity: number): typeof VOWEL_FORMANTS.A {
-    // Apply easing for smoother transitions
     const easedIntensity = easeIntensity(intensity);
 
     if (easedIntensity < 0.4) {
-      // Dark zone: O/U blend → towards A (larger range for calm sounds)
       const t = easedIntensity / 0.4;
       const dark = this.interpolateFormants(VOWEL_FORMANTS.U, VOWEL_FORMANTS.O, 0.4);
-      return this.interpolateFormants(dark, VOWEL_FORMANTS.A, t * 0.7); // Don't fully reach A
+      return this.interpolateFormants(dark, VOWEL_FORMANTS.A, t * 0.7);
     } else if (easedIntensity < 0.75) {
-      // Neutral zone: A → towards E (smooth middle)
       const t = (easedIntensity - 0.4) / 0.35;
       return this.interpolateFormants(VOWEL_FORMANTS.A, VOWEL_FORMANTS.E, t * 0.8);
     } else {
-      // Bright zone: E → I (capped to avoid too thin/sharp)
       const t = (easedIntensity - 0.75) / 0.25;
-      return this.interpolateFormants(VOWEL_FORMANTS.E, VOWEL_FORMANTS.I, t * 0.6); // Cap brightness
+      return this.interpolateFormants(VOWEL_FORMANTS.E, VOWEL_FORMANTS.I, t * 0.6);
     }
   }
 
-  // Create a new voice for a touch point
   async createVoice(touchId: number, x: number, y: number): Promise<Voice | null> {
     if (!this.audioContext || !this.masterGain) {
       console.error('[createVoice] missing context or masterGain');
       return null;
     }
 
-    // iOS: Fire resume() non-blockingly. Awaiting here loses the gesture token
-    // and causes the promise to hang indefinitely on Safari iOS.
     if (
       this.audioContext.state === 'suspended' ||
       this.audioContext.state === 'interrupted'
@@ -277,7 +373,6 @@ export class AudioEngine {
       );
     }
 
-    // Check if this pointer is already tracked
     if (this.activePointers.has(touchId)) {
       this.releaseVoice(touchId);
     }
@@ -286,12 +381,10 @@ export class AudioEngine {
 
     const zone = this.calculateZone(x, y);
 
-    // === OSCILLATORS: Rich core with slight detune for organic warmth ===
     const oscillators: OscillatorNode[] = [];
     const gains: GainNode[] = [];
     const baseFreq = this.synestheticParams.frequency;
 
-    // Primary sine oscillator - main body
     const osc1 = this.audioContext.createOscillator();
     osc1.type = 'sine';
     osc1.frequency.value = baseFreq;
@@ -301,7 +394,6 @@ export class AudioEngine {
     oscillators.push(osc1);
     gains.push(gain1);
 
-    // Secondary oscillator: gentle detune for warmth (+3 cents)
     const osc2 = this.audioContext.createOscillator();
     osc2.type = 'sine';
     osc2.frequency.value = baseFreq * 1.0017;
@@ -311,7 +403,6 @@ export class AudioEngine {
     oscillators.push(osc2);
     gains.push(gain2);
 
-    // Third oscillator: sub-octave for warmth and body
     const osc3 = this.audioContext.createOscillator();
     osc3.type = 'sine';
     osc3.frequency.value = baseFreq * 0.5;
@@ -321,7 +412,6 @@ export class AudioEngine {
     oscillators.push(osc3);
     gains.push(gain3);
 
-    // Fourth oscillator: soft triangle for texture (-3 cents)
     const osc4 = this.audioContext.createOscillator();
     osc4.type = 'triangle';
     osc4.frequency.value = baseFreq * 0.9983;
@@ -331,9 +421,6 @@ export class AudioEngine {
     oscillators.push(osc4);
     gains.push(gain4);
 
-    // === BREATH NOISE: Subtle air layer for organic quality ===
-    // Buffer gerado com amplitude 1.0 (range -1..+1), controle único via noiseGain.
-    // Antes era 0.3 no buffer × gain — escala dupla, qualquer bug no gain escalava o ruído.
     const noiseBuffer = this.audioContext.createBuffer(1, this.audioContext.sampleRate * 2, this.audioContext.sampleRate);
     const noiseData = noiseBuffer.getChannelData(0);
     for (let i = 0; i < noiseData.length; i++) {
@@ -343,26 +430,21 @@ export class AudioEngine {
     noiseSource.buffer = noiseBuffer;
     noiseSource.loop = true;
 
-    // Noise filter - bandpass to make it breath-like
     const noiseFilter = this.audioContext.createBiquadFilter();
     noiseFilter.type = 'bandpass';
     noiseFilter.frequency.value = 1800;
     noiseFilter.Q.value = 0.7;
 
     const noiseGain = this.audioContext.createGain();
-    noiseGain.gain.value = 0; // Start silent, controlled by intensity
+    noiseGain.gain.value = 0;
 
     noiseSource.connect(noiseFilter);
     noiseFilter.connect(noiseGain);
 
-    // === FORMANT FILTERS: Vowel-like resonances (softened) ===
     const formantFilters: BiquadFilterNode[] = [];
     const formantGains: GainNode[] = [];
-    const initialFormants = this.getVowelFormants(0.25); // Start dark/calm
+    const initialFormants = this.getVowelFormants(0.25);
 
-    // Create 3 formant filters with gentler settings.
-    // Ganhos reduzidos: antes era +4 a +10dB por filtro (+30dB total possível),
-    // agora é +2 a +6dB por filtro (+18dB máximo), muito menos clipping.
     for (let i = 0; i < 3; i++) {
       const filter = this.audioContext.createBiquadFilter();
       filter.type = 'peaking';
@@ -376,45 +458,38 @@ export class AudioEngine {
       formantGains.push(fGain);
     }
 
-    // === VIBRATO LFO - natural, subtle ===
     const vibratoLFO = this.audioContext.createOscillator();
     vibratoLFO.type = 'sine';
-    vibratoLFO.frequency.value = 5.2; // Natural singing vibrato rate
+    vibratoLFO.frequency.value = 5.2;
 
     const vibratoGain = this.audioContext.createGain();
-    vibratoGain.gain.value = 0; // Start silent
+    vibratoGain.gain.value = 0;
 
     vibratoLFO.connect(vibratoGain);
-    // Connect to main oscillators for pitch modulation
     vibratoGain.connect(osc1.frequency);
     vibratoGain.connect(osc2.frequency);
     vibratoGain.connect(osc4.frequency);
 
-    // === TREMOLO LFO - very subtle brightness variation ===
     const tremoloLFO = this.audioContext.createOscillator();
     tremoloLFO.type = 'sine';
-    tremoloLFO.frequency.value = 3.2; // Slow, gentle
+    tremoloLFO.frequency.value = 3.2;
 
     const tremoloGain = this.audioContext.createGain();
     tremoloGain.gain.value = 0;
 
     tremoloLFO.connect(tremoloGain);
 
-    // === MASTER FILTER (low-pass for overall brightness) ===
     const filter = this.audioContext.createBiquadFilter();
     filter.type = 'lowpass';
     filter.frequency.value = 1800 * this.synestheticParams.filterBrightness;
     filter.Q.value = 0.7 + this.synestheticParams.harmonicDensity * 1.5;
 
-    // === ROUTING ===
-    // Oscillators → Formant chain → Master filter → Voice gain → Panner → Master
     const oscillatorMix = this.audioContext.createGain();
     oscillatorMix.gain.value = 1;
     gains.forEach(g => g.connect(oscillatorMix));
 
-    // Route through formant filters in parallel, then sum
     const formantMix = this.audioContext.createGain();
-    formantMix.gain.value = 0.55; // Reduced for less aggressive resonance
+    formantMix.gain.value = 0.55;
 
     formantFilters.forEach((ff, i) => {
       oscillatorMix.connect(ff);
@@ -422,24 +497,19 @@ export class AudioEngine {
       formantGains[i].connect(formantMix);
     });
 
-    // Add dry signal for naturalness (more dry = less formant coloration)
     const dryGain = this.audioContext.createGain();
-    dryGain.gain.value = 0.45; // More dry signal for organic blend
+    dryGain.gain.value = 0.45;
     oscillatorMix.connect(dryGain);
     dryGain.connect(filter);
     formantMix.connect(filter);
 
-    // Connect breath noise through the same master filter
     noiseGain.connect(filter);
 
-    // Connect tremolo to filter frequency for very subtle brightness modulation
     tremoloGain.connect(filter.frequency);
 
-    // Voice master gain
     const voiceGain = this.audioContext.createGain();
     voiceGain.gain.setValueAtTime(0, this.audioContext.currentTime);
 
-    // Stereo panner
     const panner =
       typeof this.audioContext.createStereoPanner === 'function'
         ? this.audioContext.createStereoPanner()
@@ -458,15 +528,12 @@ export class AudioEngine {
       voiceGain.connect(this.masterGain);
     }
 
-    // Start oscillators, noise, and LFOs
     oscillators.forEach(osc => osc.start());
     noiseSource.start();
     vibratoLFO.start();
     tremoloLFO.start();
     (window as any).__lastOscStart = performance.now();
 
-    // Smooth attack — alvo reduzido de 0.25 para VOICE_PEAK_GAIN (0.22)
-    // pra compensar múltiplas vozes somadas. O limiter ainda protege contra picos.
     voiceGain.gain.setTargetAtTime(VOICE_PEAK_GAIN, this.audioContext.currentTime, RHYTHM.ATTACK);
 
     const voice: Voice = {
@@ -496,12 +563,16 @@ export class AudioEngine {
     };
 
     VoiceManager.addVoice(touchId, voice);
+
+    // Initialize resolvedState for this touch
+    this.lastMoveTimestamps.set(touchId, performance.now());
+    this.updateResolvedState(touchId, x, y, 0);
+
     this.updateVoiceFromXY(voice, x, y);
 
     return voice;
   }
 
-  // Update voice based on XY position
   updateVoice(touchId: number, x: number, y: number): void {
     const voice = VoiceManager.getVoice(touchId);
     if (!voice || !voice.isActive || !this.audioContext) return;
@@ -509,24 +580,20 @@ export class AudioEngine {
     const now = performance.now();
     const dt = (now - voice.lastUpdate) / 1000;
 
-    // Calculate velocity
     const dx = x - voice.x;
     const dy = y - voice.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
     voice.velocity = dt > 0 ? distance / dt : 0;
 
-    // Update zone if in grid mode
     const newZone = this.calculateZone(x, y);
     if (this.gridMode === 'grid' && newZone !== voice.zone) {
       this.onZoneChange(voice, newZone);
     }
 
-    // Apply emergent behaviors in flow mode
     if (this.gridMode === 'flow') {
       this.applyFlowBehaviors(voice);
     }
 
-    // Update position
     VoiceManager.updateVoice(touchId, {
       x,
       y,
@@ -535,19 +602,24 @@ export class AudioEngine {
       lastUpdate: now,
     });
 
+    // Update resolvedState BEFORE updateVoiceFromXY so audio reads from it
+    this.updateResolvedState(touchId, x, y, voice.velocity);
+
     this.updateVoiceFromXY(voice, x, y);
   }
 
-  // Release a voice
   releaseVoice(touchId: number): void {
     this.activePointers.delete(touchId);
     LoopManager.clearLoop(touchId);
     VoiceManager.removeVoice(touchId);
+    this.resolvedStates.delete(touchId);
+    this.lastMoveTimestamps.delete(touchId);
   }
 
-  // Stop all sound - guaranteed silence
   stopAllSound(): void {
     this.activePointers.clear();
+    this.resolvedStates.clear();
+    this.lastMoveTimestamps.clear();
     LoopManager.clearAllLoops();
     VoiceManager.removeAllVoices();
 
@@ -577,11 +649,9 @@ export class AudioEngine {
     };
   }
 
-  // Private: Update voice from XY position based on mappings
   private updateVoiceFromXY(voice: Voice, x: number, y: number): void {
     if (!this.audioContext || !voice.isActive) return;
 
-    // PAN always follows finger X position
     if (voice.panner) {
       voice.panner.pan.setTargetAtTime(
         (x - 0.5) * 2,
@@ -590,7 +660,6 @@ export class AudioEngine {
       );
     }
 
-    // Calculate intensity from Y position and velocity (higher = more intensity)
     const yIntensity = 1 - y;
     const velocityBoost = Math.min(voice.velocity * 0.35, 0.2);
     const newIntensity = Math.max(0, Math.min(1, yIntensity * 0.65 + velocityBoost + 0.1));
@@ -611,26 +680,28 @@ export class AudioEngine {
         case 'frequency': {
           const baseFreq = this.synestheticParams.frequency;
 
-          // Tonal field: map X by note index so every note gets equal pad space
-          // and the last note lands exactly at the edge.
-          // Chromatic: standard linear range (216–864 Hz)
+          // Read from resolvedState when tonal field is active (single source of truth)
+          // Fallback to inline computation when chromatic
           let rawFreq: number;
+          let freq: number;
+
           if (this.scaleNotes.length > 0) {
             const index = value * (this.scaleNotes.length - 1);
             const lo = Math.floor(index);
             const hi = Math.min(lo + 1, this.scaleNotes.length - 1);
             const t = index - lo;
             rawFreq = this.scaleNotes[lo].freq + (this.scaleNotes[hi].freq - this.scaleNotes[lo].freq) * t;
+
+            const resolvedState = this.resolvedStates.get(voice.id);
+            if (resolvedState) {
+              const normVel = Math.min((voice.velocity ?? 0) / 2.0, 1);
+              freq = applyVelocityModulation(rawFreq, resolvedState.frequency, normVel);
+            } else {
+              freq = rawFreq;
+            }
           } else {
             rawFreq = baseFreq * (0.5 + value * 1.5);
-          }
-
-          // Tonal gravity: resolve to field if active, else chromatic
-          let freq = rawFreq;
-          if (this.scaleNotes.length > 0) {
-            const resolved = resolveFrequency(rawFreq, this.scaleNotes, y);
-            const normVel = Math.min((voice.velocity ?? 0) / 0.5, 1);
-            freq = applyVelocityModulation(rawFreq, resolved, normVel);
+            freq = rawFreq;
           }
 
           const glideTime = this.tonalField?.glideTime ?? RHYTHM.FAST;
@@ -676,7 +747,6 @@ export class AudioEngine {
 
         case 'amplitude':
           voice.currentAmplitude = value;
-          // Alvo escalado para VOICE_PEAK_GAIN — consistente com o ataque inicial.
           voice.masterGain.gain.setTargetAtTime(
             value * VOICE_PEAK_GAIN * 1.6,
             this.audioContext!.currentTime,
@@ -698,7 +768,6 @@ export class AudioEngine {
     if (this.mappings.y !== 'none') applyMapping(this.mappings.y, 1 - y);
   }
 
-  // Update formant filters for vowel morphing (smoothed)
   private updateFormants(voice: Voice): void {
     if (!this.audioContext || !voice.formantFilters || !voice.formantGains) return;
 
@@ -709,7 +778,6 @@ export class AudioEngine {
     voice.formantFilters.forEach((filter, i) => {
       filter.frequency.setTargetAtTime(formants.f[i], time, smoothTime);
       filter.Q.setTargetAtTime(formants.q[i], time, smoothTime);
-      // Ganho com os novos limites reduzidos (estava 4 + gain*4, agora 2 + gain*4).
       filter.gain.setTargetAtTime(
         FORMANT_GAIN_BASE_DB + formants.gain[i] * FORMANT_GAIN_RANGE_DB,
         time,
@@ -722,7 +790,6 @@ export class AudioEngine {
     });
   }
 
-  // Update vibrato based on intensity (refined for musical feel)
   private updateVibrato(voice: Voice): void {
     if (!this.audioContext || !voice.vibratoGain || !voice.tremoloGain) return;
 
@@ -731,11 +798,9 @@ export class AudioEngine {
 
     const easedIntensity = easeIntensity(voice.intensity);
 
-    // Vibrato depth: almost none at low intensity, gentle at high
     const vibratoDepth = easedIntensity * easedIntensity * baseFreq * 0.0025;
     voice.vibratoGain.gain.setTargetAtTime(vibratoDepth, time, RHYTHM.SLOW);
 
-    // Tremolo: very subtle brightness modulation (reduced)
     const tremoloDepth = easedIntensity * 80;
     voice.tremoloGain.gain.setTargetAtTime(tremoloDepth, time, RHYTHM.SLOW);
 
@@ -745,7 +810,6 @@ export class AudioEngine {
     }
   }
 
-  // Update breath/noise layer based on intensity
   private updateBreath(voice: Voice): void {
     if (!this.audioContext || !voice.gains) return;
 
@@ -756,12 +820,10 @@ export class AudioEngine {
 
     const easedIntensity = easeIntensity(voice.intensity);
 
-    // Breath: silent at low intensity, very quiet at high (max 0.025)
     const breathLevel = easedIntensity * easedIntensity * 0.025;
     noiseGain.gain.setTargetAtTime(breathLevel, time, RHYTHM.MEDIUM);
   }
 
-  // Private: Update voice from synesthetic parameters
   private updateVoiceFromParams(voice: Voice): void {
     if (!this.audioContext || !voice.isActive) return;
 
@@ -797,7 +859,6 @@ export class AudioEngine {
     this.updateVibrato(voice);
   }
 
-  // Private: Calculate zone from position (3x3 grid)
   private calculateZone(x: number, y: number): number {
     const gridSize = 3;
     const col = Math.min(Math.floor(x * gridSize), gridSize - 1);
@@ -805,7 +866,6 @@ export class AudioEngine {
     return row * gridSize + col;
   }
 
-  // Private: Handle zone changes in grid mode
   private onZoneChange(voice: Voice, newZone: number): void {
     if (!this.audioContext || !voice.isActive) return;
 
@@ -827,7 +887,6 @@ export class AudioEngine {
     this.updateFormants(voice);
   }
 
-  // Private: Apply flow mode emergent behaviors (refined for organic response)
   private applyFlowBehaviors(voice: Voice): void {
     if (!this.audioContext || !voice.isActive) return;
 
@@ -865,7 +924,6 @@ export class AudioEngine {
     this.updateBreath(voice);
   }
 
-  // Get waveform data for visualization
   getWaveformData(): Float32Array {
     if (!this.analyser) return new Float32Array(0);
 
@@ -874,7 +932,6 @@ export class AudioEngine {
     return dataArray;
   }
 
-  // Get frequency data
   getFrequencyData(): Uint8Array {
     if (!this.analyser) return new Uint8Array(0);
 
@@ -883,7 +940,6 @@ export class AudioEngine {
     return dataArray;
   }
 
-  // Set master volume
   setMasterVolume(volume: number): void {
     if (this.masterGain && this.audioContext) {
       this.masterGain.gain.setTargetAtTime(
@@ -901,7 +957,16 @@ export class AudioEngine {
   getVoiceColor(touchId: number): HSLColor | null {
     const voice = VoiceManager.getVoice(touchId);
     if (!voice || !voice.isActive) return null;
-    return audioToColor(voice.currentFrequency, voice.currentAmplitude, voice.intensity);
+
+    // Prefer ResolvedState color if available (single source of truth)
+    const resolved = this.resolvedStates.get(touchId);
+    if (resolved) {
+      return { h: resolved.hue, s: resolved.saturation, l: resolved.lightness };
+    }
+
+    // Fallback to legacy frequency-based color
+    const [hs, he] = this.getHueRange();
+    return audioToColor(voice.currentFrequency, voice.currentAmplitude, voice.intensity, hs, he);
   }
 
   getAverageColor(): HSLColor | null {
@@ -914,10 +979,18 @@ export class AudioEngine {
     ids.forEach(id => {
       const voice = VoiceManager.getVoice(id);
       if (voice && voice.isActive) {
-        const c = audioToColor(voice.currentFrequency, voice.currentAmplitude, voice.intensity);
-        hueSum += c.h;
-        satSum += c.s;
-        lightSum += c.l;
+        const resolved = this.resolvedStates.get(id);
+        if (resolved) {
+          hueSum += resolved.hue;
+          satSum += resolved.saturation;
+          lightSum += resolved.lightness;
+        } else {
+          const [hs2, he2] = this.getHueRange();
+          const c = audioToColor(voice.currentFrequency, voice.currentAmplitude, voice.intensity, hs2, he2);
+          hueSum += c.h;
+          satSum += c.s;
+          lightSum += c.l;
+        }
         count++;
       }
     });
@@ -984,7 +1057,6 @@ export class AudioEngine {
 
     this.masterGain = this.audioContext.createGain();
 
-    // Recria o limiter também — parte do signal chain permanente.
     this.masterLimiter = this.audioContext.createDynamicsCompressor();
     this.masterLimiter.threshold.setValueAtTime(-6, this.audioContext.currentTime);
     this.masterLimiter.knee.setValueAtTime(6, this.audioContext.currentTime);
