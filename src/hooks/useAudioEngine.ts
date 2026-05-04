@@ -27,15 +27,19 @@ export function useAudioEngine() {
   const [hueRange, setHueRange] = useState<[number, number]>([0, 270]);
   const [noteMarkers, setNoteMarkers] = useState<Array<{ position: number; role: string; weight: number }>>([]);
 
-  // ResolvedState map — single source of truth per touch.
-  // Polled from AudioEngine in the unified RAF loop.
-  const [resolvedStates, setResolvedStates] = useState<Map<number, ResolvedState>>(new Map());
+ // ResolvedState map — single source of truth per touch.
+// Polled from AudioEngine in the unified RAF loop.
+const [resolvedStates, setResolvedStates] = useState<Map<number, ResolvedState>>(new Map());
 
-  const unifiedRafRef = useRef<number | null>(null);
-  const activeTouches = useRef<Set<number>>(new Set());
-  const audioUnlockNeeded = useRef(true);
-  const pendingTouch = useRef<{ id: number; x: number; y: number } | null>(null);
-  const pendingVoiceCreations = useRef<Set<number>>(new Set());
+useEffect(() => {
+  (window as any).audioEngine = audioEngine;
+}, []);
+
+const unifiedRafRef = useRef<number | null>(null);
+const activeTouches = useRef<Set<number>>(new Set());
+const audioUnlockNeeded = useRef(true);
+const pendingTouch = useRef<{ id: number; x: number; y: number } | null>(null);
+const pendingVoiceCreations = useRef<Set<number>>(new Set());
 
   const ensureAudioUnlocked = useCallback(() => {
     if (!audioUnlockNeeded.current) return;
