@@ -1,7 +1,8 @@
 // SØNA Touch 01 - Audio Engine React Hook
+// ResolvedState exposed per-touch for visual consumers.
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { audioEngine, AudioMappings } from '../audio/AudioEngine';
+import { audioEngine, AudioMappings, ResolvedState } from '../audio/AudioEngine';
 import { TonalField } from '../audio/scales/MUSICAL_PRESETS';
 import { HSLColor, colorToAudioParams, applySynthColor } from '../utils/colorUtils';
 import { MappingOption, GridMode } from '../utils/constants';
@@ -23,22 +24,21 @@ export function useAudioEngine() {
   const [masterVolume, setMasterVolume] = useState(0.5);
   const [waveformData, setWaveformData] = useState<Float32Array>(new Float32Array(0));
   const [tonalField, setTonalFieldState] = useState<TonalField | null>(null);
+  const [hueRange, setHueRange] = useState<[number, number]>([0, 270]);
+  const [noteMarkers, setNoteMarkers] = useState<Array<{ position: number; role: string; weight: number }>>([]);
 
-  // RAF unificado — antes eram dois loops (voiceCount + waveform) rodando a 60fps
-  // simultaneamente. Agora um único loop atualiza ambos, reduzindo pressão no main thread.
+  // ResolvedState map — single source of truth per touch.
+  // Polled from AudioEngine in the unified RAF loop.
+  const [resolvedStates, setResolvedStates] = useState<Map<number, ResolvedState>>(new Map());
+
   const unifiedRafRef = useRef<number | null>(null);
   const activeTouches = useRef<Set<number>>(new Set());
   const audioUnlockNeeded = useRef(true);
   const pendingTouch = useRef<{ id: number; x: number; y: number } | null>(null);
-
-  // Rastreia dedos que iniciaram mas ainda não tiveram createVoice resolvido.
-  // Evita race condition: se o usuário move o dedo antes do createVoice async
-  // completar, o updateVoice tentaria atualizar uma voz que ainda não existe.
   const pendingVoiceCreations = useRef<Set<number>>(new Set());
 
   const ensureAudioUnlocked = useCallback(() => {
     if (!audioUnlockNeeded.current) return;
-
     try {
       audioEngine.ensureResumed();
       audioUnlockNeeded.current = false;
@@ -114,6 +114,11 @@ export function useAudioEngine() {
   const updateTonalField = useCallback((field: TonalField | null) => {
     setTonalFieldState(field);
     audioEngine.setTonalField(field);
+    const range = field ? [field.hueStart, field.hueEnd] : [0, 270];
+    setHueRange(range as [number, number]);
+    requestAnimationFrame(() => {
+      setNoteMarkers(audioEngine.getNoteMarkers());
+    });
   }, []);
 
   const stopAllSound = useCallback(() => {
@@ -121,6 +126,7 @@ export function useAudioEngine() {
     pendingVoiceCreations.current.clear();
     audioEngine.stopAllSound();
     setActiveVoices(0);
+    setResolvedStates(new Map());
   }, []);
 
   const handleTouchStart = useCallback((touchId: number, x: number, y: number) => {
@@ -162,9 +168,6 @@ export function useAudioEngine() {
   const handleTouchMove = useCallback((touchId: number, x: number, y: number) => {
     if (!isInitialized) return;
     if (!activeTouches.current.has(touchId)) return;
-
-    // Se o createVoice ainda não resolveu, ignora o move (voz não existe ainda).
-    // Sem isso, updateVoice chamado com touchId inexistente gera warning no AudioEngine.
     if (pendingVoiceCreations.current.has(touchId)) return;
 
     audioEngine.updateVoice(touchId, x, y);
@@ -186,24 +189,28 @@ export function useAudioEngine() {
     setActiveVoices(audioEngine.getActiveVoiceCount());
   }, [isInitialized]);
 
-  // Loop RAF unificado — atualiza voiceCount e waveform no mesmo frame.
-  // Antes: dois RAFs independentes rodando a 60fps cada = dois scheduled callbacks por frame.
+  // Unified RAF — voice count + waveform + resolvedStates polled here
   useEffect(() => {
     if (!isInitialized || !isPlaying) return;
 
     let lastVoiceCount = activeVoices;
 
     const tick = () => {
-      // Voice count — só atualiza estado se mudou (evita re-render desnecessário).
       const count = audioEngine.getActiveVoiceCount();
       if (count !== lastVoiceCount) {
         lastVoiceCount = count;
         setActiveVoices(count);
       }
 
-      // Waveform — sempre atualiza (visualização contínua).
       const data = audioEngine.getWaveformData();
       setWaveformData(data);
+
+      // Refresh + poll resolvedStates. Audio is the source of truth, React mirrors it.
+      // The refresh is necessary because restingDuration evolves even when the
+      // finger is held still and no touchmove events are fired.
+      audioEngine.refreshResolvedStates();
+      const states = audioEngine.getAllResolvedStates();
+      setResolvedStates(states);
 
       unifiedRafRef.current = requestAnimationFrame(tick);
     };
@@ -247,6 +254,7 @@ export function useAudioEngine() {
   }) => {
     audioEngine.resetAudioState();
     setActiveVoices(0);
+    setResolvedStates(new Map());
 
     const newMappings = { x: settings.mappingX, y: settings.mappingY };
     setMappings(newMappings);
@@ -266,6 +274,14 @@ export function useAudioEngine() {
 
   const getAverageColor = useCallback(() => {
     return audioEngine.getAverageColor();
+  }, []);
+
+  /**
+   * Read resolvedState for a specific touch (sync, from AudioEngine).
+   * Use this in render-time visual code that needs latest state.
+   */
+  const getResolvedState = useCallback((touchId: number): ResolvedState | null => {
+    return audioEngine.getResolvedState(touchId);
   }, []);
 
   return {
@@ -291,5 +307,10 @@ export function useAudioEngine() {
     getAverageColor,
     tonalField,
     updateTonalField,
+    hueRange,
+    noteMarkers,
+    // ResolvedState exposure
+    resolvedStates,
+    getResolvedState,
   };
 }
