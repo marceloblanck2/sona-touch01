@@ -13,7 +13,7 @@ export interface TouchPoint {
   y: number;
   active: boolean;
 }
-
+ 
 export function useAudioEngine() {
   const [isInitialized, setIsInitialized] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
