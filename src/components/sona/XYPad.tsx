@@ -642,17 +642,29 @@ export const XYPad: React.FC<XYPadProps> = ({
 
       const freqBias = mapRange(point.x, 0, 1, 1.12, 0.88);
       const resolvedScale = typeof resolved?.scale === 'number' ? resolved.scale : 1;
-      const resolvedGlow = typeof resolved?.glow === 'number' ? resolved.glow : 1;
+const resolvedGlow = typeof resolved?.glow === 'number' ? resolved.glow : 0.5;
 
-      const scale = Math.max(
-        0.66,
-        (1 + attackBoost + movementBoost - idleShrink) * resolvedScale
-      );
+// glow do ResolvedState é intensidade, não tamanho bruto
+const glowMultiplier = 0.85 + resolvedGlow * 0.55;
 
-      const size = glowSize * 62 * scale * freqBias * resolvedGlow;
+const scale = Math.max(
+  0.66,
+  (1 + attackBoost + movementBoost - idleShrink) * resolvedScale
+);
+
+const size = glowSize * 62 * scale * freqBias * glowMultiplier;
       const coreSize = size * 0.34;
-      const glowAlpha = clamp(0.30 + attackBoost * 0.34 + movementBoost * 0.28, 0.28, 0.84);
-      const shadowAlpha = clamp(0.32 + attackBoost * 0.38 + movementBoost * 0.32, 0.30, 0.96);
+      const glowAlpha = clamp(
+  0.24 + resolvedGlow * 0.42 + attackBoost * 0.22 + movementBoost * 0.22,
+  0.24,
+  0.90
+);
+
+const shadowAlpha = clamp(
+  0.26 + resolvedGlow * 0.48 + attackBoost * 0.24 + movementBoost * 0.24,
+  0.26,
+  0.98
+);
 
       return (
         <div
