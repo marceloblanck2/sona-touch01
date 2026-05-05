@@ -32,6 +32,9 @@ export interface AudioMappings {
   y: 'none' | 'frequency' | 'filter' | 'harmonics' | 'amplitude' | 'pan';
 }
 
+export type TonalAxis = 'x' | 'y';
+export type ExpressionMode = 'pan' | 'intensity' | 'delay';
+
 // Formant frequencies for vowel sounds (Hz)
 const VOWEL_FORMANTS = {
   O: { f: [380, 750, 2400], q: [6, 5, 4], gain: [1, 0.35, 0.15] },
@@ -63,6 +66,8 @@ export class AudioEngine {
     warmth: 0.5,
   };
   private mappings: AudioMappings = { x: 'frequency', y: 'filter' };
+  private tonalAxis: TonalAxis = 'y';
+  private expressionMode: ExpressionMode = 'pan';
   private gridMode: 'grid' | 'flow' = 'grid';
   private isInitialized = false;
   private activePointers: Set<number> = new Set();
@@ -162,6 +167,39 @@ export class AudioEngine {
     this.mappings = mappings;
   }
 
+  setTonalAxis(axis: TonalAxis): void {
+    this.tonalAxis = axis;
+  }
+
+  getTonalAxis(): TonalAxis {
+    return this.tonalAxis;
+  }
+
+  setExpressionMode(mode: ExpressionMode): void {
+    this.expressionMode = mode;
+  }
+
+  getExpressionMode(): ExpressionMode {
+    return this.expressionMode;
+  }
+
+  private getTonalAndExpressionValues(x: number, y: number): {
+    tonalValue: number;
+    expressionValue: number;
+  } {
+    if (this.tonalAxis === 'x') {
+      return {
+        tonalValue: x,
+        expressionValue: 1 - y,
+      };
+    }
+
+    return {
+      tonalValue: 1 - y,
+      expressionValue: x,
+    };
+  }
+
   setTonalField(field: TonalField | null): void {
     this.tonalField = field;
 
@@ -212,25 +250,14 @@ export class AudioEngine {
   // RESOLVED STATE — single source of truth per touch
   // ============================================================================
 
-  /**
-   * Get current ResolvedState for a specific touch.
-   */
   getResolvedState(touchId: number): ResolvedState | null {
     return this.resolvedStates.get(touchId) ?? null;
   }
 
-  /**
-   * Get a snapshot of all current ResolvedStates.
-   */
   getAllResolvedStates(): Map<number, ResolvedState> {
     return new Map(this.resolvedStates);
   }
 
-  /**
-   * Compute and store ResolvedState for a touch.
-   * Called from createVoice and updateVoice — keeps state in sync with audio.
-   * Returns null if no tonal field is active (chromatic mode has no resolved note).
-   */
   private updateResolvedState(
     touchId: number,
     x: number,
@@ -238,30 +265,24 @@ export class AudioEngine {
     velocity: number
   ): ResolvedState | null {
     if (this.scaleNotes.length === 0 || !this.tonalField) {
-      // Chromatic mode — no resolved state for now
       this.resolvedStates.delete(touchId);
       return null;
     }
 
-    // 1. Compute raw frequency from X position via note index
-    //    (matches updateVoiceFromXY frequency mapping)
-    const value = x; // X is the pad axis where frequency lives by default
-    const index = value * (this.scaleNotes.length - 1);
+    const { tonalValue, expressionValue } = this.getTonalAndExpressionValues(x, y);
+
+    const index = tonalValue * (this.scaleNotes.length - 1);
     const lo = Math.floor(index);
     const hi = Math.min(lo + 1, this.scaleNotes.length - 1);
     const t = index - lo;
     const rawFreq = this.scaleNotes[lo].freq + (this.scaleNotes[hi].freq - this.scaleNotes[lo].freq) * t;
 
-    // 2. Resolve via gravity
-    const resolved = resolveNote(rawFreq, this.scaleNotes, y);
+    const resolved = resolveNote(rawFreq, this.scaleNotes, expressionValue);
     if (!resolved) {
       this.resolvedStates.delete(touchId);
       return null;
     }
 
-    // 3. Compute resting duration
-    // Velocity arrives from pad-space delta/time and can exceed 1. Normalize it
-    // before sending it to ResolvedState and before using the resting threshold.
     const normalizedVelocity = Math.min(Math.max(velocity / 2.0, 0), 1);
 
     const now = performance.now();
@@ -271,11 +292,6 @@ export class AudioEngine {
 
     let restingDuration = 0;
 
-    // Reset resting when:
-    // - the touch is new;
-    // - the gesture is moving;
-    // - gravity resolves to a different note.
-    // Without noteChanged here, glow/scale could keep accumulating after a note jump.
     if (lastMove === undefined || normalizedVelocity > RESTING.velocityThreshold || noteChanged) {
       this.lastMoveTimestamps.set(touchId, now);
       restingDuration = 0;
@@ -283,15 +299,12 @@ export class AudioEngine {
       restingDuration = now - lastMove;
     }
 
-    // 4. Compute scaleDegreeNormalized (position of resolved note within field)
     const noteIndex = this.scaleNotes.indexOf(resolved);
     const totalSpan = Math.max(this.scaleNotes.length - 1, 1);
     const scaleDegreeNormalized = noteIndex / totalSpan;
 
-    // 5. yEnergy: Y baixo = energia alta (Y=0 top, Y=1 bottom in pad coords)
-    const yEnergy = 1 - y;
+    const yEnergy = expressionValue;
 
-    // 6. Build ResolvedState
     const state = buildResolvedState({
       note: resolved,
       velocity: normalizedVelocity,
@@ -306,18 +319,12 @@ export class AudioEngine {
     return state;
   }
 
-  /**
-   * Refresh dynamic ResolvedState values while touches are held still.
-   * Pointer events do not fire when a finger stops moving, but restingDuration,
-   * glow, scale and saturation still need to evolve. Called from the hook RAF.
-   */
   refreshResolvedStates(): void {
     if (this.scaleNotes.length === 0 || !this.tonalField) return;
 
     VoiceManager.getAllVoiceIds().forEach((id) => {
       const voice = VoiceManager.getVoice(id);
       if (voice && voice.isActive) {
-        // velocity 0 means: no new movement this frame, allow restingDuration to grow.
         this.updateResolvedState(id, voice.x, voice.y, 0);
       }
     });
@@ -519,14 +526,25 @@ export class AudioEngine {
       panner.pan.setValueAtTime((x - 0.5) * 2, this.audioContext.currentTime);
     }
 
+    const delayNode = this.audioContext.createDelay(1.0);
+    delayNode.delayTime.setValueAtTime(0.18, this.audioContext.currentTime);
+
+    const delayGain = this.audioContext.createGain();
+    delayGain.gain.setValueAtTime(0, this.audioContext.currentTime);
+
     filter.connect(voiceGain);
 
     if (panner) {
       voiceGain.connect(panner);
+      delayGain.connect(panner);
       panner.connect(this.masterGain);
     } else {
       voiceGain.connect(this.masterGain);
+      delayGain.connect(this.masterGain);
     }
+
+    voiceGain.connect(delayNode);
+    delayNode.connect(delayGain);
 
     oscillators.forEach(osc => osc.start());
     noiseSource.start();
@@ -562,9 +580,11 @@ export class AudioEngine {
       currentAmplitude: 0.25,
     };
 
+    (voice as any).delayNode = delayNode;
+    (voice as any).delayGain = delayGain;
+
     VoiceManager.addVoice(touchId, voice);
 
-    // Initialize resolvedState for this touch
     this.lastMoveTimestamps.set(touchId, performance.now());
     this.updateResolvedState(touchId, x, y, 0);
 
@@ -602,7 +622,6 @@ export class AudioEngine {
       lastUpdate: now,
     });
 
-    // Update resolvedState BEFORE updateVoiceFromXY so audio reads from it
     this.updateResolvedState(touchId, x, y, voice.velocity);
 
     this.updateVoiceFromXY(voice, x, y);
@@ -652,7 +671,10 @@ export class AudioEngine {
   private updateVoiceFromXY(voice: Voice, x: number, y: number): void {
     if (!this.audioContext || !voice.isActive) return;
 
-    if (voice.panner) {
+    const tonalModeActive = this.scaleNotes.length > 0 && !!this.tonalField;
+    const { tonalValue, expressionValue } = this.getTonalAndExpressionValues(x, y);
+
+    if (voice.panner && !tonalModeActive) {
       voice.panner.pan.setTargetAtTime(
         (x - 0.5) * 2,
         this.audioContext.currentTime,
@@ -660,9 +682,13 @@ export class AudioEngine {
       );
     }
 
-    const yIntensity = 1 - y;
+    const expressiveIntensity =
+      tonalModeActive && this.expressionMode === 'intensity'
+        ? expressionValue
+        : 1 - y;
+
     const velocityBoost = Math.min(voice.velocity * 0.35, 0.2);
-    const newIntensity = Math.max(0, Math.min(1, yIntensity * 0.65 + velocityBoost + 0.1));
+    const newIntensity = Math.max(0, Math.min(1, expressiveIntensity * 0.65 + velocityBoost + 0.1));
 
     voice.intensity = voice.intensity + (newIntensity - voice.intensity) * 0.08;
 
@@ -680,8 +706,6 @@ export class AudioEngine {
         case 'frequency': {
           const baseFreq = this.synestheticParams.frequency;
 
-          // Read from resolvedState when tonal field is active (single source of truth)
-          // Fallback to inline computation when chromatic
           let rawFreq: number;
           let freq: number;
 
@@ -722,7 +746,7 @@ export class AudioEngine {
           break;
         }
 
-        case 'filter':
+        case 'filter': {
           const filterFreq = 300 + value * 6000 * this.synestheticParams.filterBrightness;
           voice.filter.frequency.setTargetAtTime(
             filterFreq,
@@ -730,8 +754,9 @@ export class AudioEngine {
             RHYTHM.FAST
           );
           break;
+        }
 
-        case 'harmonics':
+        case 'harmonics': {
           if (voice.formantGains) {
             voice.formantGains.forEach((gain, i) => {
               const baseGain = [1, 0.6, 0.35][i] || 0.5;
@@ -744,8 +769,9 @@ export class AudioEngine {
             });
           }
           break;
+        }
 
-        case 'amplitude':
+        case 'amplitude': {
           voice.currentAmplitude = value;
           voice.masterGain.gain.setTargetAtTime(
             value * VOICE_PEAK_GAIN * 1.6,
@@ -753,16 +779,66 @@ export class AudioEngine {
             RHYTHM.FAST
           );
           break;
+        }
 
-        case 'pan':
-          voice.panner.pan.setTargetAtTime(
-            (value - 0.5) * 2,
-            this.audioContext!.currentTime,
-            RHYTHM.FAST
-          );
+        case 'pan': {
+          if (voice.panner) {
+            voice.panner.pan.setTargetAtTime(
+              (value - 0.5) * 2,
+              this.audioContext!.currentTime,
+              RHYTHM.FAST
+            );
+          }
           break;
+        }
       }
     };
+
+    if (tonalModeActive) {
+      applyMapping('frequency', tonalValue);
+
+      const delayGain = (voice as any).delayGain as GainNode | undefined;
+
+      if (voice.panner) {
+        const panValue = this.expressionMode === 'pan'
+          ? (expressionValue - 0.5) * 2
+          : 0;
+
+        voice.panner.pan.setTargetAtTime(
+          panValue,
+          this.audioContext.currentTime,
+          RHYTHM.FAST
+        );
+      }
+
+      if (this.expressionMode === 'intensity') {
+        voice.masterGain.gain.setTargetAtTime(
+          expressionValue * VOICE_PEAK_GAIN * 1.6,
+          this.audioContext.currentTime,
+          RHYTHM.FAST
+        );
+      } else {
+        voice.masterGain.gain.setTargetAtTime(
+          voice.intensity * VOICE_PEAK_GAIN,
+          this.audioContext.currentTime,
+          RHYTHM.FAST
+        );
+      }
+
+      if (delayGain) {
+        const delayMix = this.expressionMode === 'delay'
+          ? expressionValue * 0.45
+          : 0;
+
+        delayGain.gain.setTargetAtTime(
+          delayMix,
+          this.audioContext.currentTime,
+          RHYTHM.FAST
+        );
+      }
+
+      return;
+    }
 
     if (this.mappings.x !== 'none') applyMapping(this.mappings.x, x);
     if (this.mappings.y !== 'none') applyMapping(this.mappings.y, 1 - y);
@@ -958,13 +1034,11 @@ export class AudioEngine {
     const voice = VoiceManager.getVoice(touchId);
     if (!voice || !voice.isActive) return null;
 
-    // Prefer ResolvedState color if available (single source of truth)
     const resolved = this.resolvedStates.get(touchId);
     if (resolved) {
       return { h: resolved.hue, s: resolved.saturation, l: resolved.lightness };
     }
 
-    // Fallback to legacy frequency-based color
     const [hs, he] = this.getHueRange();
     return audioToColor(voice.currentFrequency, voice.currentAmplitude, voice.intensity, hs, he);
   }
