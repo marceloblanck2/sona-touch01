@@ -6,10 +6,13 @@ import { ModeToggle } from './ModeToggle';
 import { ColorPicker } from './ColorPicker';
 import { MappingOption, GridMode } from '../../utils/constants';
 import { HSLColor } from '../../utils/colorUtils';
+import { TonalAxis, ExpressionMode } from '../../audio/AudioEngine';
 
 interface ControlPanelProps {
   mappingX: MappingOption;
   mappingY: MappingOption;
+  tonalAxis: TonalAxis;
+  expressionMode: ExpressionMode;
   mode: GridMode;
   color: HSLColor;
   volume: number;
@@ -17,6 +20,8 @@ interface ControlPanelProps {
   glowSize: number;
   onMappingXChange: (value: MappingOption) => void;
   onMappingYChange: (value: MappingOption) => void;
+  onTonalAxisChange: (axis: TonalAxis) => void;
+  onExpressionModeChange: (mode: ExpressionMode) => void;
   onModeChange: (mode: GridMode) => void;
   onColorChange: (color: HSLColor) => void;
   onVolumeChange: (volume: number) => void;
@@ -83,9 +88,46 @@ const InlineStepper: React.FC<InlineStepperProps> = ({
   );
 };
 
+interface PillButtonProps {
+  active: boolean;
+  label: string;
+  color: HSLColor;
+  onClick: () => void;
+}
+
+const PillButton: React.FC<PillButtonProps> = ({
+  active,
+  label,
+  color,
+  onClick,
+}) => {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="px-3 py-1.5 rounded-md border text-[11px] uppercase tracking-[0.12em] transition active:scale-95"
+      style={{
+        borderColor: active
+          ? `hsl(${color.h} ${color.s}% ${color.l}% / 0.65)`
+          : `hsl(${color.h} ${color.s}% ${color.l}% / 0.18)`,
+        color: active
+          ? `hsl(${color.h} ${color.s}% ${color.l}%)`
+          : `hsl(${color.h} ${color.s}% ${color.l}% / 0.62)`,
+        background: active
+          ? `hsl(${color.h} ${color.s}% ${color.l}% / 0.14)`
+          : `hsl(${color.h} ${color.s}% ${color.l}% / 0.04)`,
+      }}
+    >
+      {label}
+    </button>
+  );
+};
+
 export const ControlPanel: React.FC<ControlPanelProps> = ({
   mappingX,
   mappingY,
+  tonalAxis,
+  expressionMode,
   mode,
   color,
   volume,
@@ -93,6 +135,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   glowSize,
   onMappingXChange,
   onMappingYChange,
+  onTonalAxisChange,
+  onExpressionModeChange,
   onModeChange,
   onColorChange,
   onVolumeChange,
@@ -110,7 +154,64 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
       <div className="space-y-2">
         <label className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-          Mapping
+          Tonal Control
+        </label>
+
+        <div className="space-y-1">
+          <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground/80">
+            Tonal Axis
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <PillButton
+              active={tonalAxis === 'x'}
+              label="X"
+              color={color}
+              onClick={() => onTonalAxisChange('x')}
+            />
+
+            <PillButton
+              active={tonalAxis === 'y'}
+              label="Y"
+              color={color}
+              onClick={() => onTonalAxisChange('y')}
+            />
+          </div>
+        </div>
+
+        <div className="space-y-1 pt-1">
+          <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground/80">
+            Expression
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <PillButton
+              active={expressionMode === 'pan'}
+              label="Pan"
+              color={color}
+              onClick={() => onExpressionModeChange('pan')}
+            />
+
+            <PillButton
+              active={expressionMode === 'intensity'}
+              label="Intensity"
+              color={color}
+              onClick={() => onExpressionModeChange('intensity')}
+            />
+
+            <PillButton
+              active={expressionMode === 'delay'}
+              label="Delay"
+              color={color}
+              onClick={() => onExpressionModeChange('delay')}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-2 pt-2 border-t border-border/30">
+        <label className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+          Free Mapping
         </label>
 
         <MappingSelector
