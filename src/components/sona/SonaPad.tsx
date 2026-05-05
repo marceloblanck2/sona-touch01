@@ -36,12 +36,16 @@ export const SonaPad: React.FC = () => {
     isInitialized,
     activeVoices,
     mappings,
+    tonalAxis,
+    expressionMode,
     gridMode,
     color,
     masterVolume,
     waveformData,
     initialize,
     updateMapping,
+    updateTonalAxis,
+    updateExpressionMode,
     updateGridMode,
     updateColor,
     updateVolume,
@@ -103,6 +107,14 @@ export const SonaPad: React.FC = () => {
     updateVolume(next);
   }, [masterVolume, updateVolume]);
 
+  const frequencyAxis = tonalField
+    ? tonalAxis
+    : mappings.x === 'frequency'
+      ? 'x'
+      : mappings.y === 'frequency'
+        ? 'y'
+        : 'x';
+
   if (isFullscreen) {
     const fullscreenBg = `
       radial-gradient(ellipse at 50% 50%, hsl(${color.h} ${color.s}% ${color.l}% / 0.08) 0%, transparent 60%),
@@ -134,7 +146,7 @@ export const SonaPad: React.FC = () => {
             getResolvedState={getResolvedState}
             hueRange={hueRange}
             noteMarkers={noteMarkers}
-            frequencyAxis={mappings.x === 'frequency' ? 'x' : mappings.y === 'frequency' ? 'y' : 'x'}
+            frequencyAxis={frequencyAxis}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
@@ -227,7 +239,7 @@ export const SonaPad: React.FC = () => {
                 getResolvedState={getResolvedState}
                 hueRange={hueRange}
                 noteMarkers={noteMarkers}
-                frequencyAxis={mappings.x === 'frequency' ? 'x' : mappings.y === 'frequency' ? 'y' : 'x'}
+                frequencyAxis={frequencyAxis}
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
@@ -268,6 +280,8 @@ export const SonaPad: React.FC = () => {
               <ControlPanel
                 mappingX={mappings.x}
                 mappingY={mappings.y}
+                tonalAxis={tonalAxis}
+                expressionMode={expressionMode}
                 mode={gridMode}
                 color={color}
                 volume={masterVolume}
@@ -275,6 +289,8 @@ export const SonaPad: React.FC = () => {
                 glowSize={glowSize}
                 onMappingXChange={(v) => updateMapping('x', v)}
                 onMappingYChange={(v) => updateMapping('y', v)}
+                onTonalAxisChange={updateTonalAxis}
+                onExpressionModeChange={updateExpressionMode}
                 onModeChange={updateGridMode}
                 onColorChange={updateColor}
                 onVolumeChange={updateVolume}
