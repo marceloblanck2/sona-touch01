@@ -11,6 +11,14 @@ interface TouchPoint {
   y: number;
 }
 
+interface ResolvedVisualState {
+  hue?: number;
+  saturation?: number;
+  lightness?: number;
+  scale?: number;
+  glow?: number;
+}
+
 interface XYPadProps {
   gridMode: GridMode;
   color: HSLColor;
@@ -18,6 +26,7 @@ interface XYPadProps {
   glowSize: number;
   hueRange?: [number, number];
   getVoiceColor?: (touchId: number) => { h: number; s: number; l: number } | null;
+  getResolvedState?: (touchId: number) => ResolvedVisualState | null;
   onTouchStart: (id: number, x: number, y: number) => void;
   onTouchMove: (id: number, x: number, y: number) => void;
   onTouchEnd: (id: number) => void;
@@ -67,7 +76,6 @@ const mapRange = (
 };
 
 const remapHueToControlledSpectrum = (hue: number): number => {
-  // Pass through — hue already mapped by frequencyToHue (wave-to-wave correspondence)
   return ((hue % 360) + 360) % 360;
 };
 
@@ -86,6 +94,7 @@ export const XYPad: React.FC<XYPadProps> = ({
   glowSize,
   hueRange = [0, 270],
   getVoiceColor,
+  getResolvedState,
   onTouchStart,
   onTouchMove,
   onTouchEnd,
@@ -199,10 +208,25 @@ export const XYPad: React.FC<XYPadProps> = ({
     );
 
     return { hue, saturation, lightness };
-  }, []);
+  }, [hueRange]);
 
   const getVisualColorForPointer = useCallback((pointerId: number, x: number, y: number, speed: number) => {
     const fallback = getFallbackVisualColor(x, y, speed);
+    const resolved = getResolvedState ? getResolvedState(pointerId) : null;
+
+    if (
+      resolved &&
+      typeof resolved.hue === 'number' &&
+      typeof resolved.saturation === 'number' &&
+      typeof resolved.lightness === 'number'
+    ) {
+      return {
+        hue: remapHueToControlledSpectrum(resolved.hue),
+        saturation: clamp(resolved.saturation, 40, 98),
+        lightness: clamp(resolved.lightness, 10, 88),
+      };
+    }
+
     const audioColor = getVoiceColor ? getVoiceColor(pointerId) : null;
 
     if (!audioColor) {
@@ -216,7 +240,7 @@ export const XYPad: React.FC<XYPadProps> = ({
       saturation: clamp(audioColor.s * 0.75 + fallback.saturation * 0.25, 40, 98),
       lightness: clamp(audioColor.l * 0.7 + fallback.lightness * 0.3, 10, 88),
     };
-  }, [getFallbackVisualColor, getVoiceColor]);
+  }, [getFallbackVisualColor, getVoiceColor, getResolvedState]);
 
   const updateGestureColor = useCallback((x: number, y: number, pointerId?: number) => {
     const prevPos = lastPositionRef.current;
@@ -494,7 +518,6 @@ export const XYPad: React.FC<XYPadProps> = ({
         {noteMarkers.map((note, i) => {
           const pct = note.position * 100;
 
-          // Opacity and size based on role
           const roleOpacity: Record<string, number> = {
             anchor: 0.55,
             color: 0.35,
@@ -600,6 +623,8 @@ export const XYPad: React.FC<XYPadProps> = ({
     return Array.from(touchPoints.values()).map(point => {
       const visual = touchVisualsRef.current.get(point.id);
       const pointColor = visual?.color ?? gestureColorRef.current;
+      const resolved = getResolvedState ? getResolvedState(point.id) : null;
+
       const ageMs = visual ? now - visual.bornAt : 0;
       const timeSinceMoveMs = visual ? now - visual.lastMoveAt : 0;
       const lastSpeed = visual?.lastSpeed ?? 0;
@@ -616,8 +641,15 @@ export const XYPad: React.FC<XYPadProps> = ({
             );
 
       const freqBias = mapRange(point.x, 0, 1, 1.12, 0.88);
-      const scale = Math.max(0.66, 1 + attackBoost + movementBoost - idleShrink);
-      const size = glowSize * 62 * scale * freqBias;
+      const resolvedScale = typeof resolved?.scale === 'number' ? resolved.scale : 1;
+      const resolvedGlow = typeof resolved?.glow === 'number' ? resolved.glow : 1;
+
+      const scale = Math.max(
+        0.66,
+        (1 + attackBoost + movementBoost - idleShrink) * resolvedScale
+      );
+
+      const size = glowSize * 62 * scale * freqBias * resolvedGlow;
       const coreSize = size * 0.34;
       const glowAlpha = clamp(0.30 + attackBoost * 0.34 + movementBoost * 0.28, 0.28, 0.84);
       const shadowAlpha = clamp(0.32 + attackBoost * 0.38 + movementBoost * 0.32, 0.30, 0.96);
