@@ -2,7 +2,13 @@
 // ResolvedState exposed per-touch for visual consumers.
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { audioEngine, AudioMappings, ResolvedState } from '../audio/AudioEngine';
+import {
+  audioEngine,
+  AudioMappings,
+  ResolvedState,
+  TonalAxis,
+  ExpressionMode,
+} from '../audio/AudioEngine';
 import { TonalField } from '../audio/scales/MUSICAL_PRESETS';
 import { HSLColor, colorToAudioParams, applySynthColor } from '../utils/colorUtils';
 import { MappingOption, GridMode } from '../utils/constants';
@@ -19,6 +25,8 @@ export function useAudioEngine() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [activeVoices, setActiveVoices] = useState(0);
   const [mappings, setMappings] = useState<AudioMappings>({ x: 'frequency', y: 'filter' });
+  const [tonalAxis, setTonalAxisState] = useState<TonalAxis>('y');
+  const [expressionMode, setExpressionModeState] = useState<ExpressionMode>('pan');
   const [gridMode, setGridMode] = useState<GridMode>('grid');
   const [color, setColor] = useState<HSLColor>({ h: 38, s: 75, l: 55 });
   const [masterVolume, setMasterVolume] = useState(0.5);
@@ -27,24 +35,22 @@ export function useAudioEngine() {
   const [hueRange, setHueRange] = useState<[number, number]>([0, 270]);
   const [noteMarkers, setNoteMarkers] = useState<Array<{ position: number; role: string; weight: number }>>([]);
 
- // ResolvedState map — single source of truth per touch.
-// Polled from AudioEngine in the unified RAF loop.
-const [resolvedStates, setResolvedStates] = useState<Map<number, ResolvedState>>(new Map());
+  const [resolvedStates, setResolvedStates] = useState<Map<number, ResolvedState>>(new Map());
 
-useEffect(() => {
-  console.log('[DEBUG] imported audioEngine:', audioEngine);
+  useEffect(() => {
+    console.log('[DEBUG] imported audioEngine:', audioEngine);
 
-  (window as any).audioEngine = audioEngine;
-  (globalThis as any).audioEngine = audioEngine;
+    (window as any).audioEngine = audioEngine;
+    (globalThis as any).audioEngine = audioEngine;
 
-  console.log('[DEBUG] window.audioEngine:', (window as any).audioEngine);
-}, []);
+    console.log('[DEBUG] window.audioEngine:', (window as any).audioEngine);
+  }, []);
 
-const unifiedRafRef = useRef<number | null>(null);
-const activeTouches = useRef<Set<number>>(new Set());
-const audioUnlockNeeded = useRef(true);
-const pendingTouch = useRef<{ id: number; x: number; y: number } | null>(null);
-const pendingVoiceCreations = useRef<Set<number>>(new Set());
+  const unifiedRafRef = useRef<number | null>(null);
+  const activeTouches = useRef<Set<number>>(new Set());
+  const audioUnlockNeeded = useRef(true);
+  const pendingTouch = useRef<{ id: number; x: number; y: number } | null>(null);
+  const pendingVoiceCreations = useRef<Set<number>>(new Set());
 
   const ensureAudioUnlocked = useCallback(() => {
     if (!audioUnlockNeeded.current) return;
@@ -100,6 +106,17 @@ const pendingVoiceCreations = useRef<Set<number>>(new Set());
     audioEngine.setMappings(newMappings);
   }, [mappings]);
 
+  const updateTonalAxis = useCallback((axis: TonalAxis) => {
+    setTonalAxisState(axis);
+    audioEngine.setTonalAxis(axis);
+    setResolvedStates(audioEngine.getAllResolvedStates());
+  }, []);
+
+  const updateExpressionMode = useCallback((mode: ExpressionMode) => {
+    setExpressionModeState(mode);
+    audioEngine.setExpressionMode(mode);
+  }, []);
+
   const updateGridMode = useCallback((mode: GridMode) => {
     activeTouches.current.clear();
     pendingVoiceCreations.current.clear();
@@ -125,6 +142,8 @@ const pendingVoiceCreations = useRef<Set<number>>(new Set());
     audioEngine.setTonalField(field);
     const range = field ? [field.hueStart, field.hueEnd] : [0, 270];
     setHueRange(range as [number, number]);
+    setResolvedStates(new Map());
+
     requestAnimationFrame(() => {
       setNoteMarkers(audioEngine.getNoteMarkers());
     });
@@ -198,7 +217,6 @@ const pendingVoiceCreations = useRef<Set<number>>(new Set());
     setActiveVoices(audioEngine.getActiveVoiceCount());
   }, [isInitialized]);
 
-  // Unified RAF — voice count + waveform + resolvedStates polled here
   useEffect(() => {
     if (!isInitialized || !isPlaying) return;
 
@@ -214,9 +232,6 @@ const pendingVoiceCreations = useRef<Set<number>>(new Set());
       const data = audioEngine.getWaveformData();
       setWaveformData(data);
 
-      // Refresh + poll resolvedStates. Audio is the source of truth, React mirrors it.
-      // The refresh is necessary because restingDuration evolves even when the
-      // finger is held still and no touchmove events are fired.
       audioEngine.refreshResolvedStates();
       const states = audioEngine.getAllResolvedStates();
       setResolvedStates(states);
@@ -285,10 +300,6 @@ const pendingVoiceCreations = useRef<Set<number>>(new Set());
     return audioEngine.getAverageColor();
   }, []);
 
-  /**
-   * Read resolvedState for a specific touch (sync, from AudioEngine).
-   * Use this in render-time visual code that needs latest state.
-   */
   const getResolvedState = useCallback((touchId: number): ResolvedState | null => {
     return audioEngine.getResolvedState(touchId);
   }, []);
@@ -298,12 +309,16 @@ const pendingVoiceCreations = useRef<Set<number>>(new Set());
     isPlaying,
     activeVoices,
     mappings,
+    tonalAxis,
+    expressionMode,
     gridMode,
     color,
     masterVolume,
     waveformData,
     initialize,
     updateMapping,
+    updateTonalAxis,
+    updateExpressionMode,
     updateGridMode,
     updateColor,
     updateVolume,
@@ -318,7 +333,6 @@ const pendingVoiceCreations = useRef<Set<number>>(new Set());
     updateTonalField,
     hueRange,
     noteMarkers,
-    // ResolvedState exposure
     resolvedStates,
     getResolvedState,
   };
