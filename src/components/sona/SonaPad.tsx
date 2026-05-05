@@ -55,21 +55,22 @@ export const SonaPad: React.FC = () => {
     updateTonalField,
     hueRange,
     noteMarkers,
+    getResolvedState,
   } = useAudioEngine();
 
-useEffect(() => {
-  applySettings({
-    mappingX: 'pan',
-    mappingY: 'frequency',
-    mode: 'flow',
-    color: { h: 210, s: 60, l: 55 },
-  });
+  useEffect(() => {
+    applySettings({
+      mappingX: 'pan',
+      mappingY: 'frequency',
+      mode: 'flow',
+      color: { h: 210, s: 60, l: 55 },
+    });
 
-  setGlowSize(0.75);
-  setTrailDuration(3);
-  updateVolume(glowToVolume(0.75));
-}, [applySettings, updateVolume]);
-  
+    setGlowSize(0.75);
+    setTrailDuration(3);
+    updateVolume(glowToVolume(0.75));
+  }, [applySettings, updateVolume]);
+
   const handleLoadPreset = useCallback((preset: Preset) => {
     applySettings({
       mappingX: preset.mappingX,
@@ -130,6 +131,7 @@ useEffect(() => {
             trailDuration={trailDuration}
             glowSize={glowSize}
             getVoiceColor={getVoiceColor}
+            getResolvedState={getResolvedState}
             hueRange={hueRange}
             noteMarkers={noteMarkers}
             frequencyAxis={mappings.x === 'frequency' ? 'x' : mappings.y === 'frequency' ? 'y' : 'x'}
@@ -222,6 +224,7 @@ useEffect(() => {
                 trailDuration={trailDuration}
                 glowSize={glowSize}
                 getVoiceColor={getVoiceColor}
+                getResolvedState={getResolvedState}
                 hueRange={hueRange}
                 noteMarkers={noteMarkers}
                 frequencyAxis={mappings.x === 'frequency' ? 'x' : mappings.y === 'frequency' ? 'y' : 'x'}
