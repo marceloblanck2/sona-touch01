@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { midiToFreq432, midiToNoteName, midiToOctave, buildScaleFrequencies, A4_FREQ, A4_MIDI } from './TUNING';
 import { SCALES } from './SCALES';
+import { BASE_FREQUENCY } from '../../utils/constants';
 
 describe('midiToFreq432', () => {
   it('tunes A4 (MIDI 69) to exactly 432 Hz', () => {
@@ -13,6 +14,10 @@ describe('midiToFreq432', () => {
   it('A4_MIDI and A4_FREQ constants match the 432 Hz tuning spec', () => {
     expect(A4_MIDI).toBe(69);
     expect(A4_FREQ).toBe(432);
+  });
+
+  it('A4_FREQ (TUNING.ts) stays in sync with BASE_FREQUENCY (utils/constants.ts) — two independent sources of truth for 432 Hz, see issue "Tuning has two sources of truth"', () => {
+    expect(A4_FREQ).toBe(BASE_FREQUENCY);
   });
 
   it('doubles frequency exactly one octave up', () => {
