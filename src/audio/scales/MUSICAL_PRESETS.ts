@@ -17,8 +17,9 @@ export interface TonalField {
   scaleKey: string;       // key into SCALES (null entry = chromatic/free)
   glideTime: number;      // seconds for pitch transition
 
-  // Sensory
-  baseColor: { h: number; s: number; l: number };
+  // Color field — hue arc from lowest to highest note
+  hueStart: number;  // hue at lowest note (0–360°)
+  hueEnd: number;    // hue at highest note (0–360°)
 
   // Visual field mode
   visualMode: FieldVisibility;
@@ -33,7 +34,8 @@ export const MUSICAL_PRESETS: TonalField[] = [
     octaves: 4,
     scaleKey: 'chromatic',
     glideTime: 0.03,
-    baseColor: { h: 220, s: 40, l: 50 },
+    hueStart: 0,    // vermelho
+    hueEnd: 260,    // violeta
     visualMode: 'hidden',
   },
   {
@@ -44,7 +46,8 @@ export const MUSICAL_PRESETS: TonalField[] = [
     octaves: 4,
     scaleKey: 'natural_minor',
     glideTime: 0.04,
-    baseColor: { h: 240, s: 55, l: 45 },
+    hueStart: 260,  // violeta
+    hueEnd: 180,    // ciano
     visualMode: 'hidden',
   },
   {
@@ -55,7 +58,8 @@ export const MUSICAL_PRESETS: TonalField[] = [
     octaves: 4,
     scaleKey: 'major',
     glideTime: 0.04,
-    baseColor: { h: 55, s: 70, l: 60 },
+    hueStart: 30,   // laranja
+    hueEnd: 140,    // verde
     visualMode: 'hidden',
   },
   {
@@ -66,7 +70,8 @@ export const MUSICAL_PRESETS: TonalField[] = [
     octaves: 4,
     scaleKey: 'harmonic_minor',
     glideTime: 0.05, // slightly slower glide — tensão que resolve devagar
-    baseColor: { h: 0, s: 60, l: 35 },
+    hueStart: 0,    // vermelho
+    hueEnd: 300,    // magenta/violeta — tensão dramática
     visualMode: 'hidden',
   },
 ];
