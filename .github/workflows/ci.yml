@@ -27,5 +27,8 @@ jobs:
         run: npm run lint
         continue-on-error: true
 
+      - name: Unit tests
+        run: npm test
+
       - name: Build
         run: npm run build
