@@ -185,28 +185,35 @@ export function applySynthColor(color: HSLColor) {
 // Convert a frequency (Hz) to a hue (0-360)
 // Inverse of the colorToAudioParams frequency mapping
 // Maps the audible range to the full color wheel
-export function frequencyToHue(freq: number): number {
-  // Wave-to-wave correspondence: sound frequency → light frequency → hue
-  // Sound range: 110 Hz (A1, H1) → 1760 Hz (A5, H16) — 4 harmonic octaves
-  // Light range: 770 THz (red, 770nm) → 430 THz (violet, 380nm)
-  // Same logarithmic position in each spectrum = same perceptual proportion.
-  // Low sound (110 Hz)  → red   (0°)    long wavelength
-  // Mid sound (440 Hz)  → green (135°)  mid wavelength
-  // High sound (1760 Hz)→ violet(270°)  short wavelength
-  const minFreq = 110;   // A1 — fundamental of harmonic series
-  const maxFreq = 1760;  // A5 — 16th harmonic of A1
+export function frequencyToHue(
+  freq: number,
+  hueStart = 0,    // default: red
+  hueEnd = 270     // default: violet
+): number {
+  // Relative perceptual mapping: position in field defines color.
+  // hueStart = color at lowest note, hueEnd = color at highest note.
+  // Each preset defines its own color arc — same gesture, different emotional identity.
+  const minFreq = BASE_FREQUENCY * 0.25; // 108 Hz
+  const maxFreq = BASE_FREQUENCY * 4.0;  // 1728 Hz
   const clamped = Math.max(minFreq, Math.min(maxFreq, freq));
   const norm = Math.log2(clamped / minFreq) / Math.log2(maxFreq / minFreq);
-  return norm * 270;
+  // Interpolate between hueStart and hueEnd (allows reverse arcs e.g. blue→green)
+  return hueStart + norm * (hueEnd - hueStart);
 }
 
 // Convert audio state to a complete HSL color
 // freq: current frequency in Hz
 // amplitude: 0-1 output level → lightness
 // intensity: 0-1 vowel morphing intensity → saturation
-export function audioToColor(freq: number, amplitude: number, intensity: number): HSLColor {
+export function audioToColor(
+  freq: number,
+  amplitude: number,
+  intensity: number,
+  hueStart = 0,
+  hueEnd = 270
+): HSLColor {
   return {
-    h: frequencyToHue(freq),
+    h: frequencyToHue(freq, hueStart, hueEnd),
     s: Math.round(40 + intensity * 60),  // 40-100% saturation
     l: Math.round(35 + amplitude * 50),  // 35-85% lightness
   };
