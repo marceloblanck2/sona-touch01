@@ -22,7 +22,7 @@ export const Header: React.FC<HeaderProps> = ({
         <h1
           className="text-2xl font-semibold tracking-[0.2em]"
           style={{
-            background: `linear-gradient(135deg, hsl(${color.h} ${color.s}% ${color.l}%), hsl(${(color.h + 30) % 360} ${color.s}% ${Math.min(color.l + 10, 95)}%))`,
+            backgroundImage: `linear-gradient(135deg, hsl(${color.h} ${color.s}% ${color.l}%), hsl(${(color.h + 30) % 360} ${color.s}% ${Math.min(color.l + 10, 95)}%))`,
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             backgroundClip: 'text',
